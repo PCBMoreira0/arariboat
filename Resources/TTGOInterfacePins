@@ -1,0 +1,16 @@
+VSPI: // SX1276 RF modem with SPISettings: 10MHz/ MSB/ Mode0  //SPI bus normally attached to pins 5, 18, 19 and 23, but can be matrixed to any pins
+  5: SCLK
+  18: NSS
+  19: MISO
+  27: MOSI
+HSPI: // SDCard SPISettings: 10MHz/ MSB/ Mode0    //SPI bus normally mapped to pins 12 - 15, but can be matrixed to any pins
+  12: MISO
+  13: MOSI
+  14: SCLK
+  15: NSS
+I2C: //SSD1306 OLED driver
+  RST: -1
+  SDA: 21
+  SCL: 22
+
+

@@ -1,0 +1,451 @@
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3608 bytes of free stack
+Task temperatureRead has 3368 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96300
+
+[10056734] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10056736] addresses: 
+[10056737] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10056740] addresses: 
+[10056742] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10056908] received base UDP address: [188.165.23.196]:5582
+[10056910] received base transient range: 5600 5620
+[10056917] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10056918] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10056925] addresses: 
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3608 bytes of free stack
+Task temperatureRead has 3368 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96292
+
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2616 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96292
+
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96292
+
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+Found 0 devices
+Unknown command: 
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96076
+
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96292
+
+[10082188] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10082190] addresses: 
+[10082190] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10082194] addresses: 
+[10082196] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10082358] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10082359] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10082364] addresses: 
+[10082671] received base UDP address: [188.165.23.196]:5582
+[10082673] received base transient range: 5600 5620
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96284
+
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96284
+
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96284
+
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96284
+
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96284
+
+[10107850] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10107852] addresses: 
+[10107853] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10107857] addresses: 
+[10107859] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10107999] received base UDP address: [188.165.23.196]:5582
+[10108001] received base transient range: 5600 5620
+[10108032] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10108033] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10108039] addresses: 
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96296
+
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96296
+
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2472 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96296
+
+Unknown command: 
+Found 1 devices
+Device 0 Address: 28FF2561A3160516
+Thermal probe 0: -127.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.500000
+Thermal probe 0: -127.000000
+Thermal probe 0: -127.000000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: -127.000000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+[10133515] received base UDP address: [188.165.23.196]:5582
+[10133517] received base transient range: 5600 5620
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+Thermal probe 0: 25.500000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+[10158907] received base UDP address: [188.165.23.196]:5582
+[10158908] received base transient range: 5600 5620
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+[10184303] received base UDP address: [188.165.23.196]:5582
+[10184304] received base transient range: 5600 5620
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2248 bytes of free stack
+Task server has 3080 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 2488 bytes of free stack
+Task temperatureRead has 2072 bytes of free stack
+Task measurer has 528 bytes of free stack
+Free heap: 96032
+
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000
+Thermal probe 0: 25.250000

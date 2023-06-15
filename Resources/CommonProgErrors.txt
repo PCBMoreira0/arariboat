@@ -1,0 +1,7 @@
+1) Software parameter / Hardware pin permutation
+2) Static variable sharing between same functions being applied to different contexts.
+3) Mistaking assignment and equality operators.
+4) Forgetting commas to end statements.
+5) Forgetting quotes for strings.
+6) Blocking methods causing delays
+7) No implicit conversion call to constructor!

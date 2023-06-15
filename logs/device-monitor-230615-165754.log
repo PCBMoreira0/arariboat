@@ -1,0 +1,481 @@
+Thermal probe one: 85.000000
+[10005555] TCP connection to base server established
+[10005556] received hello cookie 10ea77377409a3617e99c13b7707713d
+[10005557] info request fc94:977a:9af5:bcd8:efff:da4c:c86d:3195
+[10005594] info request fc94:050c:e453:ef91:203c:6ef2:3f9b:8145
+[10005629] info request fc94:b01d:1803:8dd8:b293:5c7d:7639:932a
+[10005663] info request fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae
+[10005805] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10005806] addresses: 
+[10005807] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10005812] addresses: 
+[10005813] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10005820] addresses: 
+[10005822] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10005829] addresses: 
+[10006157] received base UDP address: [188.165.23.196]:5582
+[10006159] received base transient range: 5600 5620
+[10006163] received invalid message from base (kind: 6)
+[10006164] received invalid message from base (kind: 6)
+[10006171] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10006315] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10006321] received base UDP address: [188.165.23.196]:5582
+[10006322] received base transient range: 5600 5620
+[10006329] received invalid message from base (kind: 6)
+[10006333] received base UDP address: [188.165.23.196]:5582
+[10006334] received base transient range: 5600 5620
+Thermal probe one: 85.000000
+[10006858] sending init request...
+[10006871] sending join code request: [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a] [YNqd5m2Bjp65Miucf9R95p] [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p]
+[10007292] hello 2 from fc94b01d18038dd8b2935c7d7639932a
+[10007294] peer flags: 3
+[10007379] negotiated session keys c0ad39460146 bbdf53b751ce
+[10007380] established secure connection to fc94b01d18038dd8b2935c7d7639932a
+[10007433] hello 2 from fc94b01d18038dd8b2935c7d7639932a
+[10007435] peer flags: 3
+[10007482] invalid helloseq
+Thermal probe one: -127.000000
+Thermal probe one: 85.000000
+[10008878] sending init request...
+[10008894] sending join code request: [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a] [YNqd5m2Bjp65Miucf9R95p] [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p]
+[10008937] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10008940] addresses: 
+[10008982] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10008984] addresses: 
+[10009034] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10009037] addresses: 
+[10009323] remote command: init-response (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:41184)
+[10009329] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10009470] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+Thermal probe one: 85.000000
+[10009902] remote command: get-version (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:34822)
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 99412
+
+[10010131] UDP connection to base server established
+[10010176] remote command: cleanup (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:40614)
+[10010182] write configdata (len: 171)
+[10010456] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:47752)
+[10010457] control command: host-add
+[10010465] Updating hosts file for master
+[10010465] Updating hosts file for nitee-power
+[10010477] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:47805)
+[10010478] control command: whitelist-add
+Thermal probe one: 85.000000
+[10010756] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:54286)
+[10010758] control command: host-add
+[10010766] Updating hosts file for master
+[10010767] Updating hosts file for nitee-power
+[10010767] Updating hosts file for arariboia-new
+[10010784] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:38603)
+[10010785] control command: whitelist-add
+[10011027] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:42353)
+[10011028] control command: host-add
+[10011037] Updating hosts file for master
+[10011038] Updating hosts file for home
+[10011038] Updating hosts file for nitee-power
+[10011040] Updating hosts file for arariboia-new
+[10011059] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:54412)
+[10011060] control command: whitelist-add
+[10011365] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:38305)
+[10011367] control command: host-add
+[10011376] Updating hosts file for master
+[10011377] Updating hosts file for home
+[10011377] Updating hosts file for nitee-power
+[10011378] Updating hosts file for arariboia-new
+[10011392] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:58003)
+[10011393] control command: whitelist-add
+Thermal probe one: 85.000000
+[10011679] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:54210)
+[10011680] control command: host-add
+[10011691] Updating hosts file for master
+[10011691] Updating hosts file for home
+[10011691] Updating hosts file for nitee-power
+[10011692] Updating hosts file for arariboia-new
+[10011696] Updating hosts file for estebook
+[10011713] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:39214)
+[10011716] control command: whitelist-add
+[10011979] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:45987)
+[10011980] control command: host-add
+[10011991] Updating hosts file for boat32
+[10011992] Updating hosts file for master
+[10011992] Updating hosts file for home
+[10011992] Updating hosts file for nitee-power
+[10011996] Updating hosts file for arariboia-new
+[10012000] Updating hosts file for estebook
+[10012396] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10012538] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96040
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96040
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: -127.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96040
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96040
+
+Thermal probe one: 85.000000
+[10031087] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10031089] addresses: 
+[10031090] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10031094] addresses: 
+[10031097] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+Thermal probe one: 85.000000
+[10031240] received base UDP address: [188.165.23.196]:5582
+[10031242] received base transient range: 5600 5620
+[10031304] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10031305] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10031310] addresses: 
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: -127.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+[10056477] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10056479] addresses: 
+[10056479] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10056483] addresses: 
+[10056485] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10056627] received base UDP address: [188.165.23.196]:5582
+[10056629] received base transient range: 5600 5620
+[10056654] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10056655] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10056660] addresses: 
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96036
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96036
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96036
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96036
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96036
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+[10081872] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10081874] addresses: 
+[10081874] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10081878] addresses: 
+[10081880] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10082052] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10082053] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10082059] addresses: 
+[10082146] received base UDP address: [188.165.23.196]:5582
+[10082148] received base transient range: 5600 5620
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: -127.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+[10107332] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10107334] addresses: 
+[10107334] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10107338] addresses: 
+[10107340] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+Thermal probe one: 85.000000
+[10107506] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10107507] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10107512] addresses: 
+[10107519] received base UDP address: [188.165.23.196]:5582
+[10107521] received base transient range: 5600 5620
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: -127.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3624 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 500 bytes of free stack
+Free heap: 96032
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000

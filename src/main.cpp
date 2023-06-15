@@ -7,6 +7,7 @@
 #include <AsyncElegantOTA.h>
 #include <unordered_map>
 #include "DallasTemperature.h"
+#include "TinyGPSPlus.h"
 
 
 TaskHandle_t ledBlinkerTask = nullptr;
@@ -15,9 +16,10 @@ TaskHandle_t serverTask = nullptr;
 TaskHandle_t vpnConnectionTask = nullptr;
 TaskHandle_t serialReaderTask = nullptr;
 TaskHandle_t temperatureReaderTask = nullptr;
+TaskHandle_t gpsReaderTask = nullptr;
 TaskHandle_t highWaterMeasurerTask = nullptr;
 
-TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &highWaterMeasurerTask};
+TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &highWaterMeasurerTask};
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]);
 
 constexpr int ledPin = 2;
@@ -149,12 +151,12 @@ void ServerTask(void* parameter) {
                 delete client;
             }, nullptr);
 
-            client->onTimeout([](void* arg, AsyncClient* client, uint32_t time) {
+            client->onTimeout([](void* arg, AsyncClient* client, int32_t time) {
                 Serial.printf("Timeout: %lu\n", time);
                 client->close();
             }, nullptr);
 
-            client->onAck([](void* arg, AsyncClient* client, size_t len, uint32_t time) {
+            client->onAck([](void* arg, AsyncClient* client, size_t len, int32_t time) {
                 Serial.printf("Ack: %lu\n", time);
             }, nullptr);
 
@@ -276,7 +278,7 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 void DallasDeviceScanIndex(DallasTemperature& sensors);
 void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermalProbeOne, DeviceAddress &thermalProbeTwo);
 void TemperatureReaderTask(void* parameter) {
-    constexpr uint8_t temperaturePin = 23;
+    constexpr uint8_t temperaturePin = 4;
     OneWire oneWire(temperaturePin);
     DallasTemperature sensors(&oneWire);
     DeviceAddress thermalProbeOne = { 0x28, 0xFF, 0x25, 0x61, 0xA3, 0x16, 0x05, 0x16 };
@@ -343,6 +345,30 @@ void DallasRequestTemperatures(DallasTemperature &sensors) {
     
 }
 
+void GpsReaderTask(void* parameter) {
+    constexpr uint8_t gpsRxPin = 19;
+    constexpr uint8_t gpsTxPin = 18;
+    constexpr int32_t baudRate = 9600;
+    
+    TinyGPSPlus gps;
+    // Use UART2 for GPS
+    Serial2.begin(baudRate, SERIAL_8N1, gpsRxPin, gpsTxPin);
+    while (true) {
+        while (Serial2.available()) {
+            Serial.print((char)Serial2.read());
+            //if(gps.encode(Serial2.read())) {
+            //    if (gps.location.isValid()) {
+            //        Serial.printf("Latitude: %f, Longitude: %f\n", gps.location.lat(), gps.location.lng());
+            //    }
+            //    else {
+            //        Serial.println("Invalid GPS location");
+            //    }
+            //}
+        }
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+    }
+}
+
 void HighWaterMeasurerTask(void* parameter) {
     while (true) {
         Serial.printf("\n");
@@ -365,6 +391,7 @@ void setup() {
     xTaskCreate(VpnConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTask);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTask);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTask);
+    xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTask);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 

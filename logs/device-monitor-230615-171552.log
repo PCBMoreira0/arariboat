@@ -1,0 +1,223 @@
+
+Task ledBlinker has 1088 bytes of free stack
+Task wifiConnection has 3208 bytes of free stack
+Task server has 3256 bytes of free stack
+Task vpnConnection has 3656 bytes of free stack
+Task serialReader has 3656 bytes of free stack
+Task temperatureRead has 3256 bytes of free stack
+Task measurer has 672 bytes of free stack
+Free heap: 207080
+
+Thermal probe one: -127.000000
+Trying to connect to NITEE
+.Connected to WiFi
+[10000668] write license (len: 0)
+[10000681] initOnTcpThread
+[10000682] bind -> 0
+[10000695] ngsocket fc94:124c:15d1:6dad:f80c:3733:4ffc:410c listening on 5582
+[10000707] Updating hosts file for master
+[10000713] write configdata (len: 171)
+[10000716] sending join request to fc94:b01d:1803:8dd8:b293:5c7d:7639:932a
+[10000717] websetup UDP send failed (9)
+[10000722] waiting until base address is resolved...
+[10000723] sending init request...
+[10000759] sending join code request: [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a] [YNqd5m2Bjp65Miucf9R95p] [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p]
+[10000841] createPeer fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae
+[10000843] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10000844] addresses: 
+[10000846] info request fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae
+[10000919] createPeer fc94:050c:e453:ef91:203c:6ef2:3f9b:8145
+[10000920] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10000922] addresses: 
+[10000923] info request fc94:050c:e453:ef91:203c:6ef2:3f9b:8145
+[10000993] createPeer fc94:b01d:1803:8dd8:b293:5c7d:7639:932a
+[10000994] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10000996] addresses: 
+[10000998] info request fc94:b01d:1803:8dd8:b293:5c7d:7639:932a
+[10001069] createPeer fc94:977a:9af5:bcd8:efff:da4c:c86d:3195
+[10001070] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10001071] addresses: 
+[10001073] info request fc94:977a:9af5:bcd8:efff:da4c:c86d:3195
+Thermal probe one: 85.000000
+Received notification to change blink rate to 1000
+[10002120] waiting until base address is resolved...
+Thermal probe one: 85.000000
+[10002769] sending init request...
+[10002782] sending join code request: [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a] [YNqd5m2Bjp65Miucf9R95p] [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p]
+Thermal probe one: 85.000000
+[10003980] waiting until base address is resolved...
+Thermal probe one: 85.000000
+[10004788] sending init request...
+[10004807] sending join code request: [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a] [YNqd5m2Bjp65Miucf9R95p] [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p]
+[10004849] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10004851] addresses: 
+[10004888] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10004890] addresses: 
+[10004929] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10004931] addresses: 
+[10004967] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10004969] addresses: 
+[10005010] retrying with fallback base address: [188.165.23.196]:443
+[10005012] establishing connection to base [188.165.23.196]:443
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3608 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 448 bytes of free stack
+Free heap: 103436
+
+Thermal probe one: 85.000000
+[10005629] TCP connection to base server established
+[10005630] received hello cookie 28dc8f1c3fbbc842beee23ab6254cc80
+[10005631] info request fc94:977a:9af5:bcd8:efff:da4c:c86d:3195
+[10005670] info request fc94:050c:e453:ef91:203c:6ef2:3f9b:8145
+[10005704] info request fc94:b01d:1803:8dd8:b293:5c7d:7639:932a
+[10005741] info request fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae
+[10005898] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10005901] addresses: 
+[10005902] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10005908] addresses: 
+[10005911] received base UDP address: [188.165.23.196]:5582
+[10005913] received base transient range: 5600 5620
+[10005917] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10005923] addresses: 
+[10005926] received invalid message from base (kind: 6)
+[10005931] reestablish connection to [fc94:7d8a:8254:8e9b:7e54:ad88:4540:0cae]
+[10005937] addresses: 
+[10005951] received invalid message from base (kind: 6)
+[10005977] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10006124] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+[10006130] received invalid message from base (kind: 6)
+[10006138] received base UDP address: [188.165.23.196]:5582
+[10006140] received base transient range: 5600 5620
+[10006143] received base UDP address: [188.165.23.196]:5582
+[10006144] received base transient range: 5600 5620
+Thermal probe one: 85.000000
+[10006814] sending init request...
+[10006827] sending join code request: [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a] [YNqd5m2Bjp65Miucf9R95p] [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p]
+[10007218] hello 2 from fc94b01d18038dd8b2935c7d7639932a
+[10007220] peer flags: 3
+Thermal probe one: 85.000000
+[10007306] negotiated session keys 6d406b68c284 0bdf785c595c
+[10007307] established secure connection to fc94b01d18038dd8b2935c7d7639932a
+[10007360] hello 2 from fc94b01d18038dd8b2935c7d7639932a
+[10007362] peer flags: 3
+[10007410] invalid helloseq
+Thermal probe one: 85.000000
+[10008834] sending init request...
+[10008847] sending join code request: [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a] [YNqd5m2Bjp65Miucf9R95p] [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p]
+[10008936] reestablish connection to [fc94:050c:e453:ef91:203c:6ef2:3f9b:8145]
+[10008938] addresses: 
+[10008988] reestablish connection to [fc94:977a:9af5:bcd8:efff:da4c:c86d:3195]
+[10008990] addresses: 
+[10009000] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10009146] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+Thermal probe one: -127.000000
+[10009803] remote command: init-response (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:35094)
+[10010038] UDP connection to base server established
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3608 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 448 bytes of free stack
+Free heap: 101172
+
+[10010244] remote command: get-version (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:53180)
+Thermal probe one: 85.000000
+[10010551] remote command: cleanup (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:34821)
+[10010860] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:33831)
+[10010861] control command: host-add
+[10010869] Updating hosts file for master
+[10010869] Updating hosts file for nitee-power
+[10010887] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:43695)
+[10010889] control command: whitelist-add
+[10011166] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:37352)
+[10011167] control command: host-add
+[10011176] Updating hosts file for master
+[10011176] Updating hosts file for nitee-power
+[10011176] Updating hosts file for arariboia-new
+[10011193] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:51838)
+[10011194] control command: whitelist-add
+Thermal probe one: 85.000000
+[10011474] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:56359)
+[10011475] control command: host-add
+[10011485] Updating hosts file for master
+[10011485] Updating hosts file for home
+[10011485] Updating hosts file for nitee-power
+[10011487] Updating hosts file for arariboia-new
+[10011503] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:35437)
+[10011504] control command: whitelist-add
+[10011792] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:34908)
+[10011793] control command: host-add
+[10011803] Updating hosts file for master
+[10011803] Updating hosts file for home
+[10011803] Updating hosts file for nitee-power
+[10011804] Updating hosts file for arariboia-new
+[10011822] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:46283)
+[10011823] control command: whitelist-add
+[10012159] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:42276)
+[10012160] control command: host-add
+[10012171] Updating hosts file for master
+[10012171] Updating hosts file for home
+[10012172] Updating hosts file for nitee-power
+[10012172] Updating hosts file for arariboia-new
+[10012177] Updating hosts file for estebook
+[10012185] reestablish connection to [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]
+[10012195] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:32887)
+[10012197] control command: whitelist-add
+[10012337] addresses: [10.32.193.1]:5582, [10.32.193.1]:31952, [127.0.0.1]:5582, [172.23.0.2]:5582, 
+Thermal probe one: 85.000000
+[10013216] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:42276)
+[10013217] control command: host-add
+[10013227] Updating hosts file for master
+[10013228] Updating hosts file for home
+[10013228] Updating hosts file for nitee-power
+[10013229] Updating hosts file for arariboia-new
+[10013233] Updating hosts file for estebook
+[10013249] remote command: whitelist-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:32887)
+[10013251] control command: whitelist-add
+Thermal probe one: 85.000000
+[10013524] remote command: host-add (from [fc94:b01d:1803:8dd8:b293:5c7d:7639:932a]:58868)
+[10013525] control command: host-add
+[10013536] Updating hosts file for boat32
+[10013537] Updating hosts file for master
+[10013537] Updating hosts file for home
+[10013537] Updating hosts file for nitee-power
+[10013541] Updating hosts file for arariboia-new
+[10013545] Updating hosts file for estebook
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3608 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 448 bytes of free stack
+Free heap: 96052
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: -127.000000
+Thermal probe one: 85.000000
+
+Task ledBlinker has 112 bytes of free stack
+Task wifiConnection has 2296 bytes of free stack
+Task server has 3124 bytes of free stack
+Task vpnConnection has 2116 bytes of free stack
+Task serialReader has 3608 bytes of free stack
+Task temperatureRead has 2244 bytes of free stack
+Task measurer has 448 bytes of free stack
+Free heap: 96052
+
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
+Thermal probe one: 85.000000
