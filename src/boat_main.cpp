@@ -29,12 +29,22 @@ bool canRequest = false;
 enum BlinkRate : uint32_t {
     Slow = 1000,
     Medium = 500,
-    Fast = 100
+    Fast = 100,
+    Pulse = 100
 };
 
+enum GPSPrintOptions {
+    Off ='0',
+    Raw,
+    Parsed
+};
+
+void FastBlinkPulse();
 void LedBlinker(void* parameter) {
     pinMode(ledPin, OUTPUT);
     uint32_t blinkRate = *((uint32_t*)parameter);
+    uint32_t previousBlinkRate = blinkRate;
+    
     while (true) {
         digitalWrite(ledPin, HIGH);
         vTaskDelay(pdMS_TO_TICKS(blinkRate));
@@ -44,7 +54,21 @@ void LedBlinker(void* parameter) {
         // Set blink rate to the value received from the notification
         if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0) == pdTRUE) {
             Serial.printf("Received notification to change blink rate to %d\n", blinkRate);
+            if (blinkRate == BlinkRate::Pulse) {
+                FastBlinkPulse();
+                blinkRate = previousBlinkRate;
+            }
         }
+    }
+}
+
+void FastBlinkPulse() {
+    // 10 pulses
+    for (int i = 0; i < 10; i++) {
+        digitalWrite(ledPin, HIGH);
+        vTaskDelay(pdMS_TO_TICKS(50));
+        digitalWrite(ledPin, LOW);
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -152,12 +176,13 @@ void ServerTask(void* parameter) {
             }, nullptr);
 
             client->onTimeout([](void* arg, AsyncClient* client, int32_t time) {
-                Serial.printf("Timeout: %lu\n", time);
+                Serial.printf("Timeout: %d\n", time);
                 client->close();
             }, nullptr);
 
             client->onAck([](void* arg, AsyncClient* client, size_t len, int32_t time) {
-                Serial.printf("Ack: %lu\n", time);
+                Serial.printf("Ack: %d\n", time);
+                
             }, nullptr);
 
             client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
@@ -221,58 +246,97 @@ void SerialReaderTask(void* parameter) {
 template <std::size_t N>
 void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 
-    if (buffer[0] == 'L') {
-        if (buffer[1] == '1') {
-            digitalWrite(ledPin, HIGH);
+    char command = buffer[0];
+    char value = buffer[1];
+
+    switch (command) {
+
+        case 'L' : {
+ 
+            if (value == 1) {
+                digitalWrite(ledPin, HIGH);
+            }
+            else if (value == 0) {
+                digitalWrite(ledPin, LOW);
+            }
+            break;
         }
-        else if (buffer[1] == '0') {
-            digitalWrite(ledPin, LOW);
+
+        case 'B' : {
+                
+                static const std::unordered_map<char, BlinkRate> blinkRateMap = {
+                    {'0', BlinkRate::Slow},
+                    {'1', BlinkRate::Medium},
+                    {'2', BlinkRate::Fast}
+                };
+
+                auto it = blinkRateMap.find(buffer[1]);
+                if (it != blinkRateMap.end()) {
+                    xTaskNotify(ledBlinkerTask, (uint32_t)it->second, eSetValueWithOverwrite);
+                    Serial.printf("Blink rate set to %c\n", buffer[1]);
+                    break;
+                }
+                else {
+                    Serial.printf("Invalid blink rate: %c\n", buffer[1]);
+                    break;
+                }
+            break;
         }
-    }
-    else if (buffer[0] == 'B') {
-        if (buffer[1] == '1') {
-            xTaskNotify(ledBlinkerTask, BlinkRate::Slow, eSetValueWithOverwrite);
+
+        case 'C' : {
+
+            if (value == 1) {
+                canRequest = true;
+            }
+            else if (value == 0) {
+                canRequest = false;
+            }
+            break;
         }
-        else if (buffer[1] == '2') {
-            xTaskNotify(ledBlinkerTask, BlinkRate::Medium, eSetValueWithOverwrite);
-        }
-        else if (buffer[1] == '3') {
-            xTaskNotify(ledBlinkerTask, BlinkRate::Fast, eSetValueWithOverwrite);
-        }
-    }
-    else if (buffer[0] == 'C') {
-        if (buffer[1] == '1') {
-            canRequest = true;
-        }
-        else if (buffer[1] == '0') {
-            canRequest = false;
-        }
-    }
-    else if (buffer[0] == 'R') {
-        if (canRequest) {
-            Serial.printf("Sending request to %s\n", (const char*)&buffer[1]);
-            HTTPClient http;
-            http.begin((const char*)&buffer[1]);
-            int httpCode = http.GET();
-            if (httpCode > 0) {
-                String payload = http.getString();
-                Serial.println(payload);
+
+        case 'R' : {
+
+            if (canRequest) {
+                Serial.printf("Sending request to %s\n", (const char*)&buffer[1]);
+                HTTPClient http;
+                http.begin((const char*)&buffer[1]);
+                int httpCode = http.GET();
+                if (httpCode > 0) {
+                    String payload = http.getString();
+                    Serial.println(payload);
+                }
+                else {
+                    Serial.printf("Request failed, error: %s\n", http.errorToString(httpCode).c_str());
+                }
+                http.end();
             }
             else {
-                Serial.printf("Request failed, error: %s\n", http.errorToString(httpCode).c_str());
+                Serial.println("Cannot send request, C0 not received");
             }
-            http.end();
+            break;
         }
-        else {
-            Serial.println("Cannot send request, C0 not received");
+
+        case 'T' : {
+
+            xTaskNotify(temperatureReaderTask, 1, eSetValueWithOverwrite);
+            break;
         }
+
+        case 'G' : {
+            
+            xTaskNotify(gpsReaderTask, value, eSetValueWithOverwrite);
+            break;
+        }
+
+        case '\r':
+        case '\n':
+            break;
+
+        default:
+            break;
     }
-    else if (buffer[0] == 'T') {
-        xTaskNotify(temperatureReaderTask, 1, eSetValueWithOverwrite);
-    }
-    else {
-        Serial.printf("Unknown command: %s\n", buffer.data());
-    }
+
+    
 }
 
 void DallasDeviceScanIndex(DallasTemperature& sensors);
@@ -351,21 +415,39 @@ void GpsReaderTask(void* parameter) {
     constexpr int32_t baudRate = 9600;
     
     TinyGPSPlus gps;
-    // Use UART2 for GPS
+    uint32_t gpsMode = GPSPrintOptions::Parsed;
+
     Serial2.begin(baudRate, SERIAL_8N1, gpsRxPin, gpsTxPin);
     while (true) {
         while (Serial2.available()) {
-            Serial.print((char)Serial2.read());
-            //if(gps.encode(Serial2.read())) {
-            //    if (gps.location.isValid()) {
-            //        Serial.printf("Latitude: %f, Longitude: %f\n", gps.location.lat(), gps.location.lng());
-            //    }
-            //    else {
-            //        Serial.println("Invalid GPS location");
-            //    }
-            //}
+            switch (gpsMode) {
+                
+                case GPSPrintOptions::Off:
+                    Serial2.read();
+                    break;
+
+                case GPSPrintOptions::Raw:
+                    Serial.print((char)Serial2.read());
+                    break;
+
+                case GPSPrintOptions::Parsed:
+                    if(gps.encode(Serial2.read())) {
+                        if (gps.location.isValid()) {
+                            Serial.printf("Latitude: %f, Longitude: %f\n", gps.location.lat(), gps.location.lng());
+                        }
+                        else {
+                            Serial.println("Invalid GPS location");
+                        }
+                    }
+                    break;
+
+                default:
+                    Serial.printf("Unknown GPS mode: %d\n", gpsMode);
+                    gpsMode = GPSPrintOptions::Parsed;
+                    break;
+            }           
         }
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+        xTaskNotifyWait(0, 0, &gpsMode, 2000);
     }
 }
 
@@ -378,20 +460,20 @@ void HighWaterMeasurerTask(void* parameter) {
         // free heap
         Serial.printf("Free heap: %d\n", esp_get_free_heap_size());
         Serial.printf("\n");
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
 
 void setup() {
     Serial.begin(115200);
-    uint32_t interval = 1000;
+    uint32_t interval = 1000; // Example of passing a parameter to a task
     xTaskCreate(LedBlinker, "ledBlinker", 1500, (void*)&interval, 1, &ledBlinkerTask);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTask);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
     xTaskCreate(VpnConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTask);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTask);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTask);
-    xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTask);
+    xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTask);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
