@@ -1,11 +1,11 @@
 from platformio.public import DeviceMonitorFilterBase
 
 class MyFilter(DeviceMonitorFilterBase):
-    NAME = "myfilter"
+    NAME = "gps"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print("My filter has loaded")
+        print("GPS filter has loaded")
         # buffer
         self.buffer = ""
 
@@ -18,11 +18,8 @@ class MyFilter(DeviceMonitorFilterBase):
         # read until first new line
         if "\n" in self.buffer:
             line, self.buffer = self.buffer.split("\n", 1)
-            if line.startswith("$GP"):
-                #ignore GPS messages that are not GPRMC
-                if line.startswith("$GPRMC"):
-                    return f"{line}\n"
-                return ""            
-            return f"{line}\n"
+            if line.startswith("[GPS]"):
+                return f"{line}\n"            
+            return ""
         return ""
         

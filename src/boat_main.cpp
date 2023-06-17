@@ -34,13 +34,14 @@ enum BlinkRate : uint32_t {
 };
 
 enum GPSPrintOptions {
-    Off ='0',
+    Off = '0',
     Raw,
     Parsed
 };
 
 void FastBlinkPulse();
 void LedBlinker(void* parameter) {
+
     pinMode(ledPin, OUTPUT);
     uint32_t blinkRate = *((uint32_t*)parameter);
     uint32_t previousBlinkRate = blinkRate;
@@ -74,6 +75,7 @@ void FastBlinkPulse() {
 
 // WifiConnection Task
 void WifiConnectionTask(void* parameter) {
+
     std::unordered_map<const char*, const char*> wifiCredentials;
     wifiCredentials["Ursula"] = "biaviad36";
     wifiCredentials["EMobil 1"] = "faraboia";
@@ -197,6 +199,7 @@ void ServerTask(void* parameter) {
 }
 
 void VpnConnectionTask(void* parameter) {
+
     const char* hostName = "boat32";
     const char* husarnetJoinCode = "fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p";
     const char* dashboardURL = "default";
@@ -335,13 +338,12 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
         default:
             break;
     }
-
-    
 }
 
 void DallasDeviceScanIndex(DallasTemperature& sensors);
 void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermalProbeOne, DeviceAddress &thermalProbeTwo);
 void TemperatureReaderTask(void* parameter) {
+
     constexpr uint8_t temperaturePin = 4;
     OneWire oneWire(temperaturePin);
     DallasTemperature sensors(&oneWire);
@@ -382,20 +384,20 @@ void DallasDeviceScanIndex(DallasTemperature &sensors) {
 
 void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermalProbeOne, DeviceAddress &thermalProbeTwo) {
 
-  sensors.begin();
-  Serial.printf("Found %d devices\n", sensors.getDeviceCount());
-  if (!sensors.getAddress(thermalProbeOne, 0)) {
-    Serial.printf("Unable to find address for Device 0\n");
-  } else {
-    Serial.printf("Device 0 Address: ");
-    PrintDallasAddress(thermalProbeOne);
-  }
-  if (!sensors.getAddress(thermalProbeTwo, 1)) {
-    Serial.printf("Unable to find address for Device 1\n");
-  } else {
-    Serial.printf("Device 1 Address: ");
-    PrintDallasAddress(thermalProbeTwo);
-  }
+    sensors.begin();
+    Serial.printf("Found %d devices\n", sensors.getDeviceCount());
+    if (!sensors.getAddress(thermalProbeOne, 0)) {
+      Serial.printf("Unable to find address for Device 0\n");
+    } else {
+      Serial.printf("Device 0 Address: ");
+      PrintDallasAddress(thermalProbeOne);
+    }
+    if (!sensors.getAddress(thermalProbeTwo, 1)) {
+      Serial.printf("Unable to find address for Device 1\n");
+    } else {
+      Serial.printf("Device 1 Address: ");
+      PrintDallasAddress(thermalProbeTwo);
+    }
 
 }
 
@@ -431,12 +433,19 @@ void GpsReaderTask(void* parameter) {
                     break;
 
                 case GPSPrintOptions::Parsed:
-                    if(gps.encode(Serial2.read())) {
+                    if (gps.encode(Serial2.read())) {
+
                         if (gps.location.isValid()) {
-                            Serial.printf("Latitude: %f, Longitude: %f\n", gps.location.lat(), gps.location.lng());
+                            Serial.printf("[GPS]Latitude: %f, Longitude: %f\n", gps.location.lat(), gps.location.lng());
                         }
-                        else {
-                            Serial.println("Invalid GPS location");
+                        if (gps.altitude.isValid()) {
+                            Serial.printf("[GPS]Altitude: %f\n", gps.altitude.meters());
+                        }
+                        if (gps.speed.isValid()) {
+                            Serial.printf("[GPS]Speed: %f\n", gps.speed.kmph());
+                        }
+                        if (gps.course.isValid()) {
+                            Serial.printf("[GPS]Course: %f\n", gps.course.deg());
                         }
                     }
                     break;
@@ -466,7 +475,7 @@ void HighWaterMeasurerTask(void* parameter) {
 
 void setup() {
     Serial.begin(115200);
-    uint32_t interval = 1000; // Example of passing a parameter to a task
+    uint32_t interval = 1000; // I left it here as an example of passing a parameter to a task instead of using a global variable
     xTaskCreate(LedBlinker, "ledBlinker", 1500, (void*)&interval, 1, &ledBlinkerTask);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTask);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
