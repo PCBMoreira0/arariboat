@@ -27,8 +27,6 @@ TaskHandle_t highWaterMeasurerTask = nullptr;
 TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &highWaterMeasurerTask};
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
-constexpr int ledPin = 2;
-
 bool canRequest = false;
 
 enum BlinkRate : uint32_t {
@@ -45,9 +43,10 @@ enum GPSPrintOptions {
 };
 
 // Tasks can send notifications here to change the blink rate of the LED in order to communicate the status of the boat.
-void FastBlinkPulse();
+void FastBlinkPulse(int pin);
 void LedBlinker(void* parameter) {
 
+    constexpr int ledPin = 2;
     pinMode(ledPin, OUTPUT);
     uint32_t blinkRate = *((uint32_t*)parameter);
     uint32_t previousBlinkRate = blinkRate;
@@ -62,19 +61,19 @@ void LedBlinker(void* parameter) {
         if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0) == pdTRUE) {
             Serial.printf("Received notification to change blink rate to %d\n", blinkRate);
             if (blinkRate == BlinkRate::Pulse) {
-                FastBlinkPulse();
+                FastBlinkPulse(ledPin);
                 blinkRate = previousBlinkRate;
             }
         }
     }
 }
 
-void FastBlinkPulse() {
+void FastBlinkPulse(int pin) {
     // 10 pulses
     for (int i = 0; i < 10; i++) {
-        digitalWrite(ledPin, HIGH);
+        digitalWrite(pin, HIGH);
         vTaskDelay(pdMS_TO_TICKS(50));
-        digitalWrite(ledPin, LOW);
+        digitalWrite(pin, LOW);
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
@@ -268,17 +267,6 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 
     switch (command) {
 
-        case 'L' : {
- 
-            if (value == 1) {
-                digitalWrite(ledPin, HIGH);
-            }
-            else if (value == 0) {
-                digitalWrite(ledPin, LOW);
-            }
-            break;
-        }
-
         case 'B' : {
                 
                 static const std::unordered_map<char, BlinkRate> blinkRateMap = {
@@ -448,17 +436,21 @@ void DallasRequestTemperatures(DallasTemperature &sensors) {
 }
 
 void GpsReaderTask(void* parameter) {
-    constexpr uint8_t gpsRxPin = 19;
-    constexpr uint8_t gpsTxPin = 18;
-    constexpr int32_t baudRate = 9600;
-    // Example latitude: 40.741895 (north is positive)
-    // Example longitude: -73.989308 (west is negative)
-    // The fifth decimal place is worth up to 1.1 m. The sixth decimal place is worth up to 11cm. And so forth.
 
+    // Example of latitude: 40.741895 (north is positive)
+    // Example of longitude: -73.989308 (west is negative)
+    // The fifth decimal place is worth up to 1.1 m. The sixth decimal place is worth up to 11cm. And so forth.
+    
+    constexpr uint8_t gps_rx_pin = 19; // Chosen RX pin of ESP32 to be connected to TX pin of GPS module
+    constexpr uint8_t gps_tx_pin = 18; // Chosen TX pin of ESP32 to be connected to RX pin of GPS module
+    constexpr int32_t baud_rate = 9600; // Fixed baud rate used by NEO-6M GPS module
+    
     TinyGPSPlus gps;
     uint32_t gpsMode = GPSPrintOptions::Parsed;
 
-    Serial2.begin(baudRate, SERIAL_8N1, gpsRxPin, gpsTxPin);
+    // Three hardware serial ports are available on the ESP32 with configurable GPIOs.
+    // Serial0 is used for debugging and is connected to the USB-to-serial converter. Therefore, Serial1 and Serial2 are available.
+    Serial2.begin(baud_rate, SERIAL_8N1, gps_rx_pin, gps_tx_pin); // Initialize Serial2 with the chosen baud rate and pins
     while (true) {
         while (Serial2.available()) {
             switch (gpsMode) {
@@ -474,21 +466,37 @@ void GpsReaderTask(void* parameter) {
                 case GPSPrintOptions::Parsed:
                     if (gps.encode(Serial2.read())) {
 
+                        constexpr float invalid_value = -1.f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
+                        float latitude = invalid_value;
+                        float longitude = invalid_value;
+                        float speed = invalid_value;
+                        float course = invalid_value;
+                        uint8_t satellites = 0;
+
                         if (gps.location.isValid()) {
-                            Serial.printf("[GPS]Latitude: %f, Longitude: %f\n", gps.location.lat(), gps.location.lng());
-                        }
-                        if (gps.altitude.isValid()) {
-                            Serial.printf("[GPS]Altitude: %f\n", gps.altitude.meters());
+                            latitude = gps.location.lat();
+                            longitude = gps.location.lng();
+                            Serial.printf("[GPS]Latitude: %f, Longitude: %f\n", latitude, longitude);
                         }
                         if (gps.speed.isValid()) {
-                            Serial.printf("[GPS]Speed: %f\n", gps.speed.kmph());
+                            speed = gps.speed.kmph();
+                            Serial.printf("[GPS]Speed: %f\n", speed);
                         }
                         if (gps.course.isValid()) {
-                            Serial.printf("[GPS]Course: %f\n", gps.course.deg());
+                            course = gps.course.deg();
+                            Serial.printf("[GPS]Course: %f\n", course);
                         }
                         if (gps.satellites.isValid()) {
-                            Serial.printf("[GPS]Satellites: %d\n", gps.satellites.value());
+                            satellites = gps.satellites.value();
+                            Serial.printf("[GPS]Satellites: %d\n", satellites);
                         }
+
+                        // Prepare and send mavlink message
+                        mavlink_message_t message;
+                        mavlink_msg_gps_info_pack(1, 200, &message, latitude, longitude, speed, course, satellites);
+                        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+                        uint16_t length = mavlink_msg_to_send_buffer(buffer, &message);
+                        Serial.write(buffer, length);
                     }
                     break;
 
