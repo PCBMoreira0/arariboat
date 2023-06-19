@@ -2,13 +2,17 @@
 #include <WiFi.h> // Async Web Server
 #include "HTTPClient.h"
 #include "HttpClientFunctions.hpp"
-#include <Husarnet.h>
+#include <Husarnet.h> // IPV6 for ESP32 to enable peer-to-peer communication between devices inside a Husarnet network.
 #include <ESPAsyncWebServer.h> // Make sure to include Husarnet before this.
-#include <AsyncElegantOTA.h>
-#include <unordered_map>
-#include "DallasTemperature.h"
-#include "TinyGPSPlus.h"
+#include <AsyncElegantOTA.h> // Over the air updates for the ESP32.
+#include <unordered_map> // Hashtable for storing WiFi credentials.
+#include "DallasTemperature.h" // For the DS18B20 temperature probes.
+#include "TinyGPSPlus.h" // GPS NMEA sentence parser.
+#include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 
+// Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
+// The handle is initialized to nullptr to avoid the task being created before the setup() function.
+// Each handle is then assigned to the task created in the setup() function.
 
 TaskHandle_t ledBlinkerTask = nullptr;
 TaskHandle_t wifiConnectionTask = nullptr;
@@ -19,8 +23,9 @@ TaskHandle_t temperatureReaderTask = nullptr;
 TaskHandle_t gpsReaderTask = nullptr;
 TaskHandle_t highWaterMeasurerTask = nullptr;
 
+// Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks.
 TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &highWaterMeasurerTask};
-constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]);
+constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
 constexpr int ledPin = 2;
 
@@ -39,6 +44,7 @@ enum GPSPrintOptions {
     Parsed
 };
 
+// Tasks can send notifications here to change the blink rate of the LED in order to communicate the status of the boat.
 void FastBlinkPulse();
 void LedBlinker(void* parameter) {
 
@@ -73,9 +79,9 @@ void FastBlinkPulse() {
     }
 }
 
-// WifiConnection Task
 void WifiConnectionTask(void* parameter) {
-
+    
+    // Store WiFi credentials in a hashtable.
     std::unordered_map<const char*, const char*> wifiCredentials;
     wifiCredentials["Ursula"] = "biaviad36";
     wifiCredentials["EMobil 1"] = "faraboia";
@@ -113,7 +119,13 @@ void WifiConnectionTask(void* parameter) {
 
 void ServerTask(void* parameter) {
 
+    // Create an async web server on port 80. This is the default port for HTTP. 
+    // Async server can handle multiple requests at the same time without blocking the task.
     AsyncWebServer server(80);
+    
+    // Setup URL routes and attach callback methods to them. A callback method is called when a request is made to the URL.
+    // The callbacks must have the signature void(AsyncWebServerRequest *request). Any function with this signature can be used.
+    // Preferably, use lambda functions to keep the code in the same place.
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/html", "<h1>Boat32</h1><p>WiFi connected: " + WiFi.SSID() + "</p><p>IP address: " + WiFi.localIP().toString() + "</p>");
     });
@@ -125,10 +137,11 @@ void ServerTask(void* parameter) {
         ESP.restart();
     });
 
-    // Wait for notification from WifiConnection task that wifi is connected in order to begin the server
+    // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     
-    AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update
+    // Attach OTA update handler to the server and initialize the server.
+    AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
     server.begin();
     xTaskNotifyGive(vpnConnectionTask); // Notify VPN connection task that server is running
 
@@ -200,7 +213,8 @@ void ServerTask(void* parameter) {
 
 void VpnConnectionTask(void* parameter) {
 
-    const char* hostName = "boat32";
+    // Husarnet VPN configuration parameters
+    const char* hostName = "boat32"; // Host name can be used to access the device instead of typing IPV6 address
     const char* husarnetJoinCode = "fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p";
     const char* dashboardURL = "default";
 
@@ -341,23 +355,41 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 }
 
 void DallasDeviceScanIndex(DallasTemperature& sensors);
-void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermalProbeOne, DeviceAddress &thermalProbeTwo);
+void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermal_probe_zero, DeviceAddress &thermal_probe_one);
 void TemperatureReaderTask(void* parameter) {
 
-    constexpr uint8_t temperaturePin = 4;
-    OneWire oneWire(temperaturePin);
-    DallasTemperature sensors(&oneWire);
-    DeviceAddress thermalProbeOne = { 0x28, 0xFF, 0x25, 0x61, 0xA3, 0x16, 0x05, 0x16 };
-
+    constexpr uint8_t temperaturePin = 4; // GPIO used for OneWire communication
+    OneWire oneWire(temperaturePin); // Setup a oneWire instance to communicate with any devices that use the OneWire protocol
+    DallasTemperature sensors(&oneWire); // Pass our oneWire reference to Dallas Temperature sensor, which uses the OneWire protocol.
+    
+    // Each probe has a unique 8-byte address. Use the scanIndex method to initially find the addresses of the probes. 
+    // Then hardcode the addresses into the program. This is done to avoid the overhead of scanning for the addresses every time the function is called.
+    // You should then physically label the probes with tags or stripes as to differentiate them.
+    DeviceAddress thermal_probe_zero = { 0x28, 0xFF, 0x25, 0x61, 0xA3, 0x16, 0x05, 0x16 }; 
+    DeviceAddress thermal_probe_one = {0}; // If you have more than one probe, add the address here
+    
     while (true) {
-        sensors.requestTemperatures(); // Send the command to get temperatures
-        Serial.printf("Thermal probe one: %f\n", sensors.getTempC(thermalProbeOne));
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000))) { // Wait for notification from serial reader task
-            DallasDeviceScanIndex(sensors);
+        sensors.requestTemperatures(); // Send the command to update temperature readings
+        float temperature_motor = sensors.getTempC(thermal_probe_zero);
+        float temperature_mppt = sensors.getTempC(thermal_probe_one);
+        Serial.printf("[Temperature][%x]Motor: %f\n", thermal_probe_zero[7], temperature_motor); // [Temperature][last byte of probe address] = value is the format
+        Serial.printf("[Temperature][%x]MPPT: %f\n", thermal_probe_one[7], temperature_mppt);
+        
+        // Prepare and send a mavlink message
+        mavlink_message_t message;
+        mavlink_msg_temperatures_pack(1, 200, &message, temperature_motor, temperature_mppt);
+        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+        Serial.write(buffer, len);
+
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000))) { // Wait for notification from serial reader task to scan for new probes
+            DallasDeviceScanIndex(sensors); 
         }
     }
 }
 
+/// @brief Prints the 8-byte address of a Dallas Thermal Probe to the serial monitor
+/// @param device_address 
 void PrintDallasAddress(DeviceAddress device_address) {
 
     uint8_t device_address_length = 8; // The length of the device address is 8 bytes
@@ -368,8 +400,12 @@ void PrintDallasAddress(DeviceAddress device_address) {
     Serial.printf("\n");
 }
 
+/// @brief Scans for Dallas Thermal Probes and prints their addresses to the serial monitor
+/// After adding a new probe, run this function to find the address of the probe. Then hardcode the address into the program
+/// for faster performance.
+/// @param sensors 
 void DallasDeviceScanIndex(DallasTemperature &sensors) {
-    sensors.begin();
+    sensors.begin(); // Scan for devices on the OneWire bus.
     Serial.printf("Found %d devices\n", sensors.getDeviceCount());
     for (uint8_t i = 0; i < sensors.getDeviceCount(); i++) {
         DeviceAddress device_address;
@@ -382,21 +418,21 @@ void DallasDeviceScanIndex(DallasTemperature &sensors) {
     }
 }
 
-void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermalProbeOne, DeviceAddress &thermalProbeTwo) {
+void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermal_probe_zero, DeviceAddress &thermal_probe_one) {
 
     sensors.begin();
     Serial.printf("Found %d devices\n", sensors.getDeviceCount());
-    if (!sensors.getAddress(thermalProbeOne, 0)) {
+    if (!sensors.getAddress(thermal_probe_zero, 0)) {
       Serial.printf("Unable to find address for Device 0\n");
     } else {
       Serial.printf("Device 0 Address: ");
-      PrintDallasAddress(thermalProbeOne);
+      PrintDallasAddress(thermal_probe_zero);
     }
-    if (!sensors.getAddress(thermalProbeTwo, 1)) {
+    if (!sensors.getAddress(thermal_probe_one, 1)) {
       Serial.printf("Unable to find address for Device 1\n");
     } else {
       Serial.printf("Device 1 Address: ");
-      PrintDallasAddress(thermalProbeTwo);
+      PrintDallasAddress(thermal_probe_one);
     }
 
 }
@@ -415,7 +451,10 @@ void GpsReaderTask(void* parameter) {
     constexpr uint8_t gpsRxPin = 19;
     constexpr uint8_t gpsTxPin = 18;
     constexpr int32_t baudRate = 9600;
-    
+    // Example latitude: 40.741895 (north is positive)
+    // Example longitude: -73.989308 (west is negative)
+    // The fifth decimal place is worth up to 1.1 m. The sixth decimal place is worth up to 11cm. And so forth.
+
     TinyGPSPlus gps;
     uint32_t gpsMode = GPSPrintOptions::Parsed;
 
@@ -446,6 +485,9 @@ void GpsReaderTask(void* parameter) {
                         }
                         if (gps.course.isValid()) {
                             Serial.printf("[GPS]Course: %f\n", gps.course.deg());
+                        }
+                        if (gps.satellites.isValid()) {
+                            Serial.printf("[GPS]Satellites: %d\n", gps.satellites.value());
                         }
                     }
                     break;
