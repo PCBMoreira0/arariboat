@@ -1,14 +1,16 @@
-#include <Arduino.h>
-#include <WiFi.h> // Async Web Server
+#include <Arduino.h> // Main Arduino library, required for projects that use the Arduino framework.
+#include <WiFi.h> // Main library for WiFi connectivity, also used by AsyncWebServer.
+#include <unordered_map> // Hashtable for storing WiFi credentials.
 #include "HTTPClient.h"
 #include "HttpClientFunctions.hpp"
-#include <Husarnet.h> // IPV6 for ESP32 to enable peer-to-peer communication between devices inside a Husarnet network.
-#include <ESPAsyncWebServer.h> // Make sure to include Husarnet before this.
-#include <AsyncElegantOTA.h> // Over the air updates for the ESP32.
-#include <unordered_map> // Hashtable for storing WiFi credentials.
+#include "Husarnet.h" // IPV6 for ESP32 to enable peer-to-peer communication between devices inside a Husarnet network.
+#include "ESPAsyncWebServer.h" // Make sure to include Husarnet before this.
+#include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
 #include "DallasTemperature.h" // For the DS18B20 temperature probes.
 #include "TinyGPSPlus.h" // GPS NMEA sentence parser.
 #include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain Analog-Digital Converter for measuring current and voltage.
+#include <SPI.h> // Required for the ADS1115 ADC.\
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -21,10 +23,11 @@ TaskHandle_t vpnConnectionTask = nullptr;
 TaskHandle_t serialReaderTask = nullptr;
 TaskHandle_t temperatureReaderTask = nullptr;
 TaskHandle_t gpsReaderTask = nullptr;
+TaskHandle_t instrumentationReaderTask = nullptr;
 TaskHandle_t highWaterMeasurerTask = nullptr;
 
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks.
-TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &highWaterMeasurerTask};
+TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &instrumentationReaderTask, &highWaterMeasurerTask};
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
 bool canRequest = false;
@@ -446,14 +449,14 @@ void GpsReaderTask(void* parameter) {
     constexpr int32_t baud_rate = 9600; // Fixed baud rate used by NEO-6M GPS module
     
     TinyGPSPlus gps;
-    uint32_t gpsMode = GPSPrintOptions::Parsed;
+    uint32_t gps_mode = GPSPrintOptions::Parsed;
 
     // Three hardware serial ports are available on the ESP32 with configurable GPIOs.
     // Serial0 is used for debugging and is connected to the USB-to-serial converter. Therefore, Serial1 and Serial2 are available.
     Serial2.begin(baud_rate, SERIAL_8N1, gps_rx_pin, gps_tx_pin); // Initialize Serial2 with the chosen baud rate and pins
     while (true) {
         while (Serial2.available()) {
-            switch (gpsMode) {
+            switch (gps_mode) {
                 
                 case GPSPrintOptions::Off:
                     Serial2.read();
@@ -466,7 +469,7 @@ void GpsReaderTask(void* parameter) {
                 case GPSPrintOptions::Parsed:
                     if (gps.encode(Serial2.read())) {
 
-                        constexpr float invalid_value = -1.f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
+                        constexpr float invalid_value = -1.0f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
                         float latitude = invalid_value;
                         float longitude = invalid_value;
                         float speed = invalid_value;
@@ -501,15 +504,91 @@ void GpsReaderTask(void* parameter) {
                     break;
 
                 default:
-                    Serial.printf("Unknown GPS mode: %d\n", gpsMode);
-                    gpsMode = GPSPrintOptions::Parsed;
+                    Serial.printf("Unknown GPS mode: %d\n", gps_mode);
+                    gps_mode = GPSPrintOptions::Parsed;
                     break;
             }           
         }
-        xTaskNotifyWait(0, 0, &gpsMode, 2000);
+        xTaskNotifyWait(0, 0, &gps_mode, 2000);
     }
 }
 
+void InstrumentationReaderTask(void* parameter) {
+
+    // The use of an external ADC, the ADS1115, was chosen to obtain higher resolution and linearity, as well as programmable gain to avoid the need for instrumentation amplifiers.
+    // The ADS1115 is a 16-bit ADC with 4 channels. It is used to read the voltage of the battery and the current of motor, the MPPT output and the battery current or auxiliary system current.
+    // The ADS1115 has 4 addresses, which are determined by the state of the ADDR pin. Our board has a solder bridge that allows selection between 0x48 and 0x49.
+    // The ADS1115 is connected to the ESP32 via I2C. The ESP32 is the master and the ADS1115 is the slave. It uses the default Wire instance at pins 21(SDA) and 22(SCL) for communication.
+
+    // The ADS1115 is a Delta-sigma (ΔΣ) ADC, which is based on the principle of oversampling. The input
+    // signal of a ΔΣ ADC is sampled at a high frequency (modulator frequency) and subsequently filtered and
+    // decimated in the digital domain to yield a conversion result at the respective output data rate. The ratio between
+    // modulator frequency and output data rate is called oversampling ratio (OSR). By increasing the OSR, and thus
+    // reducing the output data rate, the noise performance of the ADC can be optimized. In other words, the input-
+    // referred noise drops when reducing the output data rate because more samples of the internal modulator are
+    // averaged to yield one conversion result. Increasing the gain, therefore reducing the input voltage range, also reduces the input-referred noise, which is
+    // particularly useful when measuring low-level signals
+    
+    Adafruit_ADS1115 adc; 
+    constexpr uint8_t adc_addresses[] = {0x48, 0x49}; // Address is determined by a solder bridge on the instrumentation board.
+    adc.setGain(GAIN_FOUR); // Configuring the PGA( Programmable Gain Amplifier) to amplify the signal by 4 times, so that the maximum input voltage is +/- 1.024V
+    adc.setDataRate(RATE_ADS1115_16SPS); // Setting a low data rate to increase the oversampling ratio of the ADC and thus reduce the noise.
+    
+    bool is_adc_initialized = false;
+    
+    while (!is_adc_initialized) {
+        xTaskNotify(ledBlinkerTask, BlinkRate::Fast, eSetValueWithOverwrite); // Blinks the LED to indicate that the ADC is not initialized yet.
+        for (auto address : adc_addresses) {
+            Serial.printf("Trying to initialize ADS1115 at address 0x%x\n", address);
+            if (adc.begin(address)) {
+                Serial.printf("ADS1115 successfully initialized at address 0x%x\n", address);
+                is_adc_initialized = true;
+                xTaskNotify(ledBlinkerTask, BlinkRate::Pulse, eSetValueWithOverwrite); // Pulse the LED to indicate that the ADC is initialized.
+                xTaskNotify(ledBlinkerTask, BlinkRate::Slow, eSetValueWithOverwrite); // Return LED to default blink rate.
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+    }
+
+    while (true) {
+
+        constexpr int32_t battery_primary_resistor = 2200; // Resistor connected to primary side of LV-20P voltage sensor.
+        constexpr int32_t battery_burden_resistor = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
+
+        // Print all values separated by commas.
+        float voltage_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
+        float current_motor_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
+        float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
+        float current_aux_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
+        Serial.printf("[Instrumentation]Battery pin voltage: %f, Motor pin voltage: %f, MPPT pin voltage: %f, Aux pin voltage: %f\n", voltage_battery_pin_voltage, current_motor_pin_voltage, current_mppt_pin_voltage, current_aux_pin_voltage);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+/// @brief Calculates the input voltage for a LV-20P voltage sensor.
+/// @param pin_voltage Voltage at corresponding pin of ADS1115.
+/// @param primary_resistor Value of resistor connected to primary side of LV-20P voltage sensor. It should be rated for 10mA for nominal RMS voltage being measured, therefore 14mA is the allowed peak current.
+/// @param burden_resistor Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
+/// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
+/// @return Input voltage at primary side of LV-20P voltage sensor.
+float CalculateBatteryVoltage(float pin_voltage, const int32_t primary_resistor, const int32_t burden_resistor, const float sensor_output_ratio) {
+    
+    return pin_voltage * primary_resistor / (burden_resistor * sensor_output_ratio);
+}
+
+/// @brief Calculates the input current for a LA-55P voltage sensor.
+/// @param pin_voltage Voltage at corresponding pin of ADS1115.
+/// @param burden_resistor Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
+/// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
+/// @return Input current at primary side of LA-55P current sensor.
+float CalculateCurrent(float pin_voltage, const int32_t burden_resistor, const float sensor_output_ratio) {
+    
+    return pin_voltage / (burden_resistor * sensor_output_ratio);
+}
+
+/// @brief 
+/// @param parameter 
 void HighWaterMeasurerTask(void* parameter) {
     while (true) {
         Serial.printf("\n");
@@ -526,13 +605,14 @@ void HighWaterMeasurerTask(void* parameter) {
 void setup() {
     Serial.begin(115200);
     uint32_t interval = 1000; // I left it here as an example of passing a parameter to a task instead of using a global variable
-    xTaskCreate(LedBlinker, "ledBlinker", 1500, (void*)&interval, 1, &ledBlinkerTask);
+    xTaskCreate(LedBlinker, "ledBlinker", 2048, (void*)&interval, 1, &ledBlinkerTask);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTask);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
     xTaskCreate(VpnConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTask);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTask);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTask);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTask);
+    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTask);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
