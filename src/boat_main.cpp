@@ -1,16 +1,16 @@
 #include <Arduino.h> // Main Arduino library, required for projects that use the Arduino framework.
 #include <WiFi.h> // Main library for WiFi connectivity, also used by AsyncWebServer.
 #include <unordered_map> // Hashtable for storing WiFi credentials.
-#include "HTTPClient.h"
-#include "HttpClientFunctions.hpp"
+#include "HTTPClient.h" // HTTP client for sending requests to a listening server.
+#include "HttpClientFunctions.hpp" // Auxiliary functions for sending HTTP requests.
 #include "Husarnet.h" // IPV6 for ESP32 to enable peer-to-peer communication between devices inside a Husarnet network.
 #include "ESPAsyncWebServer.h" // Make sure to include Husarnet before this.
 #include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
 #include "DallasTemperature.h" // For the DS18B20 temperature probes.
 #include "TinyGPSPlus.h" // GPS NMEA sentence parser.
 #include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
-#include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain Analog-Digital Converter for measuring current and voltage.
-#include <SPI.h> // Required for the ADS1115 ADC.\
+#include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain amplifier Analog-Digital Converter for measuring current and voltage.
+#include <SPI.h> // Required for the ADS1115 ADC.
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -26,7 +26,7 @@ TaskHandle_t gpsReaderTask = nullptr;
 TaskHandle_t instrumentationReaderTask = nullptr;
 TaskHandle_t highWaterMeasurerTask = nullptr;
 
-// Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks.
+// Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
 TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &instrumentationReaderTask, &highWaterMeasurerTask};
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
@@ -213,7 +213,13 @@ void ServerTask(void* parameter) {
     }
 }
 
-void VpnConnectionTask(void* parameter) {
+void VPNConnectionTask(void* parameter) {
+
+    // The use of a VPN is to allow this device to be accessed from the public internet without port forwarding or paying for a static IPV4 address.
+    // It accomplishes this by creating a virtual network between all devices that are connected to it, taking advantage of IPv6 addressing.
+    // Each device is assigned a unique IPv6 address that can be used to access it from anywhere in the world.
+    // The Husarnet VPN is free for up to 5 devices.
+    // By attaching a router with a SIM slot on the boat, messages can be exchanged by both the internet, using HTTP or WebSockets, and the LoRa radio.
 
     // Husarnet VPN configuration parameters
     const char* hostName = "boat32"; // Host name can be used to access the device instead of typing IPV6 address
@@ -346,7 +352,6 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 }
 
 void DallasDeviceScanIndex(DallasTemperature& sensors);
-void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermal_probe_zero, DeviceAddress &thermal_probe_one);
 void TemperatureReaderTask(void* parameter) {
 
     constexpr uint8_t temperaturePin = 4; // GPIO used for OneWire communication
@@ -379,9 +384,9 @@ void TemperatureReaderTask(void* parameter) {
     }
 }
 
-/// @brief Prints the 8-byte address of a Dallas Thermal Probe to the serial monitor
+/// @brief Auxiliary function to print the 8-byte address of a Dallas Thermal Probe to the serial port
 /// @param device_address 
-void PrintDallasAddress(DeviceAddress device_address) {
+void PrintProbeAddress(DeviceAddress device_address) {
 
     uint8_t device_address_length = 8; // The length of the device address is 8 bytes
     for (uint8_t i = 0; i < device_address_length; i++) { // Loop through each byte in the eight-byte address
@@ -391,7 +396,7 @@ void PrintDallasAddress(DeviceAddress device_address) {
     Serial.printf("\n");
 }
 
-/// @brief Scans for Dallas Thermal Probes and prints their addresses to the serial monitor
+/// @brief Scans for Dallas Thermal Probes and prints their addresses to the serial port
 /// After adding a new probe, run this function to find the address of the probe. Then hardcode the address into the program
 /// for faster performance.
 /// @param sensors 
@@ -404,38 +409,9 @@ void DallasDeviceScanIndex(DallasTemperature &sensors) {
             Serial.printf("Unable to find address for Device %d\n", i);
         } else {
             Serial.printf("Device %d Address: ", i);
-            PrintDallasAddress(device_address);
+            PrintProbeAddress(device_address);
         }
     }
-}
-
-void DallasTemperatureSetup(DallasTemperature &sensors, DeviceAddress &thermal_probe_zero, DeviceAddress &thermal_probe_one) {
-
-    sensors.begin();
-    Serial.printf("Found %d devices\n", sensors.getDeviceCount());
-    if (!sensors.getAddress(thermal_probe_zero, 0)) {
-      Serial.printf("Unable to find address for Device 0\n");
-    } else {
-      Serial.printf("Device 0 Address: ");
-      PrintDallasAddress(thermal_probe_zero);
-    }
-    if (!sensors.getAddress(thermal_probe_one, 1)) {
-      Serial.printf("Unable to find address for Device 1\n");
-    } else {
-      Serial.printf("Device 1 Address: ");
-      PrintDallasAddress(thermal_probe_one);
-    }
-
-}
-
-void DallasRequestTemperatures(DallasTemperature &sensors) {
-
-    Serial.printf("Number of devices: %d\n", sensors.getDeviceCount());
-    sensors.requestTemperatures();
-    for (uint8_t i = 0; i < sensors.getDeviceCount(); i++) {
-      Serial.printf("Device %d Temperature: %f\n", i, sensors.getTempCByIndex(i));
-    }
-    
 }
 
 void GpsReaderTask(void* parameter) {
@@ -467,7 +443,7 @@ void GpsReaderTask(void* parameter) {
                     break;
 
                 case GPSPrintOptions::Parsed:
-                    if (gps.encode(Serial2.read())) {
+                    if (gps.encode(Serial2.read())) { // Reads the serial stream from the NEO-6M GPS module and parses it into TinyGPSPlus object if a valid NMEA sentence is received
 
                         constexpr float invalid_value = -1.0f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
                         float latitude = invalid_value;
@@ -513,6 +489,10 @@ void GpsReaderTask(void* parameter) {
     }
 }
 
+float CalculateVoltageLV20(const float pin_voltage, const float sensor_output_ratio, const int32_t primary_resistor, const int32_t burden_resistor);
+float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ratio, const int32_t burden_resistor);
+float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistor);
+float LinearCorrection(const float input_value, const float slope, const float intercept);
 void InstrumentationReaderTask(void* parameter) {
 
     // The use of an external ADC, the ADS1115, was chosen to obtain higher resolution and linearity, as well as programmable gain to avoid the need for instrumentation amplifiers.
@@ -522,8 +502,8 @@ void InstrumentationReaderTask(void* parameter) {
 
     // The ADS1115 is a Delta-sigma (ΔΣ) ADC, which is based on the principle of oversampling. The input
     // signal of a ΔΣ ADC is sampled at a high frequency (modulator frequency) and subsequently filtered and
-    // decimated in the digital domain to yield a conversion result at the respective output data rate. The ratio between
-    // modulator frequency and output data rate is called oversampling ratio (OSR). By increasing the OSR, and thus
+    // decimated in the digital domain to yield a conversion result at the respective output data rate.
+    // The ratio between modulator frequency and output data rate is called oversampling ratio (OSR). By increasing the OSR, and thus
     // reducing the output data rate, the noise performance of the ADC can be optimized. In other words, the input-
     // referred noise drops when reducing the output data rate because more samples of the internal modulator are
     // averaged to yield one conversion result. Increasing the gain, therefore reducing the input voltage range, also reduces the input-referred noise, which is
@@ -552,43 +532,98 @@ void InstrumentationReaderTask(void* parameter) {
     }
 
     while (true) {
-
+        // Check and confirm which values of resistors are being used on the board.
+        constexpr float voltage_conversion_ratio = 2.53f; // Datasheet says 2.50, but, by using Ohm's law to get currents of secondary and primary and then dividing them, a more precise value is obtained.
         constexpr int32_t battery_primary_resistor = 2200; // Resistor connected to primary side of LV-20P voltage sensor.
         constexpr int32_t battery_burden_resistor = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
 
-        // Print all values separated by commas.
+        constexpr float current_conversion_ratio = 0.001f;
+        constexpr int32_t motor_burden_resistor = 22;
+        constexpr int32_t mppt_burden_resistor = 22;
+        constexpr int32_t aux_burden_resistor = 10; 
+
+        // In the ADS1115 single ended measurements have 15 bits of resolution. Only differential measurements have 16 bits of resolution.
+        // When using single ended mode, the maximum output code is 0x7FFF(32767), which corresponds to the full-scale input voltage.
         float voltage_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
         float current_motor_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
         float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
         float current_aux_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
-        Serial.printf("[Instrumentation]Battery pin voltage: %f, Motor pin voltage: %f, MPPT pin voltage: %f, Aux pin voltage: %f\n", voltage_battery_pin_voltage, current_motor_pin_voltage, current_mppt_pin_voltage, current_aux_pin_voltage);
+        Serial.printf("\n[Instrumentation-PIN-VOLTAGE]Battery pin voltage: %f, Motor pin voltage: %f, MPPT pin voltage: %f, Aux pin voltage: %f\n", voltage_battery_pin_voltage, current_motor_pin_voltage, current_mppt_pin_voltage, current_aux_pin_voltage);
+
+        
+        // Calibrate the voltage by comparing the voltage_battery variable against the actual voltage drop on the primary resistor using a multimeter. 
+        // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
+        float voltage_battery = CalculateVoltageLV20(voltage_battery_pin_voltage, voltage_conversion_ratio, battery_primary_resistor, battery_burden_resistor);
+        float calibrated_voltage_battery = LinearCorrection(voltage_battery, 1.1035f, 0.2398f);
+        float current_motor = CalculateCurrentLA55(current_motor_pin_voltage, current_conversion_ratio, motor_burden_resistor);
+        float current_mppt = CalculateCurrentLA55(current_mppt_pin_voltage, current_conversion_ratio, mppt_burden_resistor);
+        float current_aux = CalculateCurrentLA55(current_aux_pin_voltage, current_conversion_ratio, aux_burden_resistor);
+        Serial.printf("[Instrumentation-MEASUREMENTS]Battery voltage: %f, Motor current: %f, MPPT current: %f, Aux current: %f\n", calibrated_voltage_battery, current_motor, current_mppt, current_aux);
+
+        // Prepare and send Mavlink message
+        mavlink_message_t message;
+        mavlink_msg_instrumentation_pack(1, 200, &message, current_motor, current_mppt, current_aux, calibrated_voltage_battery);
+        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+        Serial.write(buffer, len);
+
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
-/// @brief Calculates the input voltage for a LV-20P voltage sensor.
+/// @brief Calculates the input voltage for a LV-20P voltage sensor. More specifically, it measures the voltage drop of the primary resistor and calculates the input voltage from that.
 /// @param pin_voltage Voltage at corresponding pin of ADS1115.
 /// @param primary_resistor Value of resistor connected to primary side of LV-20P voltage sensor. It should be rated for 10mA for nominal RMS voltage being measured, therefore 14mA is the allowed peak current.
 /// @param burden_resistor Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
 /// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
 /// @return Input voltage at primary side of LV-20P voltage sensor.
-float CalculateBatteryVoltage(float pin_voltage, const int32_t primary_resistor, const int32_t burden_resistor, const float sensor_output_ratio) {
+float CalculateVoltageLV20(const float pin_voltage, const float sensor_output_ratio, const int32_t primary_resistor, const int32_t burden_resistor) {
     
     return pin_voltage * primary_resistor / (burden_resistor * sensor_output_ratio);
 }
 
-/// @brief Calculates the input current for a LA-55P voltage sensor.
+/// @brief Calculates the input current for a LA-55P current sensor.
 /// @param pin_voltage Voltage at corresponding pin of ADS1115.
-/// @param burden_resistor Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
+/// @param burden_resistor Value of resistor connected to secondary side of LV-55P current sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
 /// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
 /// @return Input current at primary side of LA-55P current sensor.
-float CalculateCurrent(float pin_voltage, const int32_t burden_resistor, const float sensor_output_ratio) {
+float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ratio, const int32_t burden_resistor) {
     
     return pin_voltage / (burden_resistor * sensor_output_ratio);
 }
 
-/// @brief 
-/// @param parameter 
+/// @brief Calculates the input current for a Seneca T201DC 4-20mA loop current sensor by using a linear equation.
+/// The 4-20mA loop works by outputting 4mA for zero input and 20mA for full scale input, which get multiplied by the burden resistor to create a voltage drop that is measured by the ADS1115.
+/// It has 4 switches. One to set bipolar mode (AC current or reverse current), two bit switches to set the measurement scale and one switch to set damping on or off.
+/// By default monopolar mode and no damping are being used for the boat.
+/// @param pin_voltage Voltage at corresponding pin of ADS1115.
+/// @param burden_resistor Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
+/// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
+/// @return Input current at primary side of LA-55P current sensor.
+float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistor) {
+    
+    // Calculates the slope and intercept of the linear equation that relates input current to output voltage.
+    const float zero_input_voltage = 4.0f * burden_resistor * 0.001f; // 4mA * burden resistor
+    const float full_input_voltage = 20.0f * burden_resistor * 0.001f; // 20mA * burden resistor
+    const float zero_input_current = 0.0f;
+    const float full_input_current = selected_full_scale_range;
+    const float slope = (full_input_current - zero_input_current) / (full_input_voltage - zero_input_voltage);
+    const float intercept = zero_input_current - slope * zero_input_voltage;
+    return slope * pin_voltage + intercept;
+}
+
+/// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
+/// @param input 
+/// @param slope 
+/// @param intercept 
+/// @return Calibrated reading
+float LinearCorrection(const float input_value, const float slope, const float intercept) {
+    return slope * input_value + intercept;
+}
+
+/// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
+/// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
+/// @param parameter Unused. Just here to comply with the task function signature.
 void HighWaterMeasurerTask(void* parameter) {
     while (true) {
         Serial.printf("\n");
@@ -608,7 +643,7 @@ void setup() {
     xTaskCreate(LedBlinker, "ledBlinker", 2048, (void*)&interval, 1, &ledBlinkerTask);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTask);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
-    xTaskCreate(VpnConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTask);
+    xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTask);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTask);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTask);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTask);
