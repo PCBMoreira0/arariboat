@@ -207,19 +207,19 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
     }
 }
 
-float mapValue(float ip, float ipmin, float ipmax, float tomin, float tomax);
+// For some reason, the display gets a bug if I declare the display objects inside the task, so I declare them here
+// with static storage duration instead of using the default thread storage duration of the task.
+TFT_eSPI tft_display = TFT_eSPI(); // Object to control the TFT display
+MeterWidget widget_battery_volts    = MeterWidget(&tft_display);
+MeterWidget widget_battery_current  = MeterWidget(&tft_display);
+MeterWidget widget_motor_current    = MeterWidget(&tft_display);
+MeterWidget widget_mppt_current     = MeterWidget(&tft_display);
+
 void CockpitDisplayTask(void* parameter) {
 
     //Needs Font 2 (also Font 4 if using large scale label)
     //Make sure all the display driver and pin connections are correct by
     //editing the User_Setup.h file in the TFT_eSPI library folder.
-
-    #define LOOP_PERIOD 35 // Display updates every 35 ms
-    TFT_eSPI tft_display = TFT_eSPI();      // Invoke custom library
-    MeterWidget widget_battery_volts    = MeterWidget(&tft_display);
-    MeterWidget widget_battery_current  = MeterWidget(&tft_display);
-    MeterWidget widget_motor_current    = MeterWidget(&tft_display);
-    MeterWidget widget_mppt_current     = MeterWidget(&tft_display);
 
     constexpr float battery_volts_full_scale = 54.0;
     constexpr float battery_volts_zero_scale = 48.0;
@@ -229,7 +229,6 @@ void CockpitDisplayTask(void* parameter) {
     constexpr float motor_amps_zero_scale = 0.0;
     constexpr float mppt_amps_full_scale = 40.0;
     constexpr float mppt_amps_zero_scale = 0.0;
-
     constexpr float widget_length = 239.0f;
     constexpr float widget_height = 126.0f;
 
@@ -258,19 +257,23 @@ void CockpitDisplayTask(void* parameter) {
     //                           -Red-   -Org-  -Yell-  -Grn-
     widget_mppt_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
     widget_mppt_current.analogMeter(240, 180, mppt_amps_zero_scale, mppt_amps_full_scale, "A", "0", "10", "20", "30", "40"); 
-
+  
     while (true) {
-        
         static float angle = 0.0f;
-        static uint32_t updateTime = 0;  
+        static uint32_t update_time = 0;  
+        constexpr int loop_period = 35; // Display updates every 35 ms
         constexpr float radians_to_degrees = 3.14159265358979323846 / 180.0;
 
-        if (millis() - updateTime >= LOOP_PERIOD) {
-            updateTime = millis();
+        if (millis() - update_time >= loop_period) {
+            update_time = millis();
             angle += 4; if (angle > 360) angle = 0;
 
             // Create a Sine wave for testing, value is in range 0 - 100
             float value = 50.0 + 50.0 * sin(angle * radians_to_degrees);
+
+            auto mapValue = [](float ip, float ipmin, float ipmax, float tomin, float tomax) {
+                return (ip - ipmin) * (tomax - tomin) / (ipmax - ipmin) + tomin;
+            };
 
             float battery_current;
             battery_current = mapValue(value, (float)0.0, (float)100.0, battery_amps_zero_scale, battery_amps_full_scale);
@@ -279,7 +282,7 @@ void CockpitDisplayTask(void* parameter) {
             float battery_voltage;
             battery_voltage = mapValue(value, (float)0.0, (float)100.0, battery_volts_zero_scale, battery_volts_full_scale);
             widget_battery_volts.updateNeedle(battery_voltage, 0);
-            
+
             float motor_current;
             motor_current = mapValue(value, (float)0.0, (float)100.0, motor_amps_zero_scale, motor_amps_full_scale);
             widget_motor_current.updateNeedle(motor_current, 0);
@@ -288,26 +291,20 @@ void CockpitDisplayTask(void* parameter) {
             mppt_current = mapValue(value, (float)0.0, (float)100.0, mppt_amps_zero_scale, mppt_amps_full_scale);
             widget_mppt_current.updateNeedle(mppt_current, 0);
         }
-        vTaskDelay(pdTICKS_TO_MS(10));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
-
-float mapValue(float ip, float ipmin, float ipmax, float tomin, float tomax) {
-
-  return tomin + (((tomax - tomin) * (ip - ipmin))/ (ipmax - ipmin));
-}
-
 
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
 /// @param parameter Unused. Just here to comply with the task function signature.
 void HighWaterMeasurerTask(void* parameter) {
+
     while (true) {
         Serial.printf("\n");
         for (int i = 0; i < taskHandlesSize; i++) {
             Serial.printf("Task %s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
         }
-        // free heap
         Serial.printf("Free heap: %d\n", esp_get_free_heap_size());
         Serial.printf("\n");
         vTaskDelay(pdMS_TO_TICKS(10000));
@@ -315,6 +312,7 @@ void HighWaterMeasurerTask(void* parameter) {
 }
 
 void setup() {
+
     Serial.begin(115200);
     xTaskCreate(LedBlinker, "ledBlinker", 2048, NULL, 1, &ledBlinkerTask);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionTask);
@@ -325,6 +323,7 @@ void setup() {
 }
 
 void loop() {
+
 
 }
 
