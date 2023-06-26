@@ -1,4 +1,4 @@
-.pio
+.pio/build
 .vscode
 logs/
 monitor/__pycache__/
