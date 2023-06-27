@@ -403,8 +403,8 @@ void GpsReaderTask(void* parameter) {
     // Example of longitude: -73.989308 (west is negative)
     // The fifth decimal place is worth up to 1.1 m. The sixth decimal place is worth up to 11cm. And so forth.
     
-    constexpr uint8_t gps_rx_pin = 19; // Chosen RX pin of ESP32 to be connected to TX pin of GPS module
-    constexpr uint8_t gps_tx_pin = 18; // Chosen TX pin of ESP32 to be connected to RX pin of GPS module
+    constexpr uint8_t gps_rx_pin = 16;  
+    constexpr uint8_t gps_tx_pin = 17; 
     constexpr int32_t baud_rate = 9600; // Fixed baud rate used by NEO-6M GPS module
     
     TinyGPSPlus gps;
@@ -638,6 +638,19 @@ float LinearCorrection(const float input_value, const float slope, const float i
     return slope * input_value + intercept;
 }
 
+void RouteSerialDataTask(void* parameter) {
+
+    //constexpr int rx_pin = 5;
+    //constexpr int tx_pin = 23;
+    //constexpr int baud_rate = 115200;
+    //Serial1.begin(baud_rate, SERIAL_8N1, rx_pin, tx_pin);
+
+    while (true) {
+        Serial2.print("Hello from ESP32\n");
+        vTaskDelay(pdMS_TO_TICKS(800));
+    }
+}
+
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
 /// @param parameter Unused. Just here to comply with the task function signature.
@@ -665,11 +678,13 @@ void setup() {
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTask);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTask);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTask);
+    xTaskCreate(RouteSerialDataTask, "routeSerialData", 4096, NULL, 1, NULL);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
 void loop() {
 
 }
+
 
 
