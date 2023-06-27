@@ -30,8 +30,6 @@ TaskHandle_t highWaterMeasurerTask = nullptr;
 TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &instrumentationReaderTask, &highWaterMeasurerTask};
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
-bool canRequest = false;
-
 enum BlinkRate : uint32_t {
     Slow = 1000,
     Medium = 500,
@@ -52,7 +50,7 @@ void LedBlinker(void* parameter) {
 
     constexpr int ledPin = 2;
     pinMode(ledPin, OUTPUT);
-    uint32_t blinkRate = *((uint32_t*)parameter);
+    uint32_t blinkRate = 1000;
     uint32_t previousBlinkRate = blinkRate;
     
     while (true) {
@@ -149,68 +147,68 @@ void ServerTask(void* parameter) {
     xTaskNotifyGive(vpnConnectionTask); // Notify VPN connection task that server is running
 
     while (true) {
-        if (canRequest) {
-            canRequest = false;
-            // Get home host from husarnet list of peers
-            long randomTestValue = random(0, 10);
-            String targetURL = "/ScadaBR/httpds?voltage=" + String(randomTestValue);
-            IPv6Address ipv6;
-            String hostname = "";
-            auto peers = Husarnet.listPeers();
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        //#define USE_ASYNC_CLIENT 
+        #ifdef USE_ASYNC_CLIENT
+        // Get home host from husarnet list of peers
+        long randomTestValue = random(0, 10);
+        String targetURL = "/ScadaBR/httpds?voltage=" + String(randomTestValue);
+        IPv6Address ipv6;
+        String hostname = "";
+        auto peers = Husarnet.listPeers();
 
-            for (const auto& peer : peers) {
-                ipv6 = peer.first;
-                hostname = peer.second;
-                Serial.printf("Peer: %s, %s\n", ipv6.toString().c_str(), hostname.c_str());
-                if (hostname == String("home")) {
-                    break;
-                }
+        for (const auto& peer : peers) {
+            ipv6 = peer.first;
+            hostname = peer.second;
+            Serial.printf("Peer: %s, %s\n", ipv6.toString().c_str(), hostname.c_str());
+            if (hostname == String("home")) {
+                break;
             }
-            
-            if (hostname == "" || hostname == nullptr) {
-                Serial.println("Home host not found");
-                vTaskDelay(pdMS_TO_TICKS(500));
-                continue;
-            }
-
-            AsyncClient* client = new AsyncClient();
-            
-            client->onError([](void* arg, AsyncClient* client, int error) {
-                Serial.printf("Error: %s\n", client->errorToString(error));
-                client->close();
-            }, nullptr);
-
-            client->onConnect([targetURL, ipv6](void* arg, AsyncClient* client) {
-                Serial.println("Connected");
-                String fullURL = "GET " + targetURL + " HTTP/1.1\r\nHost: [" + ipv6.toString() + "]\r\nConnection: close\r\n\r\n";
-                Serial.printf("Sending request: %s\n", fullURL.c_str());
-                client->write(fullURL.c_str(), strlen(fullURL.c_str()));
-            }, nullptr);
-
-            client->onDisconnect([](void* arg, AsyncClient* client) {
-                Serial.println("Disconnected");
-                client->close();
-                delete client;
-            }, nullptr);
-
-            client->onTimeout([](void* arg, AsyncClient* client, int32_t time) {
-                Serial.printf("Timeout: %d\n", time);
-                client->close();
-            }, nullptr);
-
-            client->onAck([](void* arg, AsyncClient* client, size_t len, int32_t time) {
-                Serial.printf("Ack: %d\n", time);
-                
-            }, nullptr);
-
-            client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
-                Serial.printf("Data: %s\n", (char*)data);
-            }, nullptr);
-
-            client->connect(ipv6, 80);
-
         }
-        vTaskDelay(pdMS_TO_TICKS(500));
+        
+        if (hostname == "" || hostname == nullptr) {
+            Serial.println("Home host not found");
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+
+        AsyncClient* client = new AsyncClient();
+        
+        client->onError([](void* arg, AsyncClient* client, int error) {
+            Serial.printf("Error: %s\n", client->errorToString(error));
+            client->close();
+        }, nullptr);
+
+        client->onConnect([targetURL, ipv6](void* arg, AsyncClient* client) {
+            Serial.println("Connected");
+            String fullURL = "GET " + targetURL + " HTTP/1.1\r\nHost: [" + ipv6.toString() + "]\r\nConnection: close\r\n\r\n";
+            Serial.printf("Sending request: %s\n", fullURL.c_str());
+            client->write(fullURL.c_str(), strlen(fullURL.c_str()));
+        }, nullptr);
+
+        client->onDisconnect([](void* arg, AsyncClient* client) {
+            Serial.println("Disconnected");
+            client->close();
+            delete client;
+        }, nullptr);
+
+        client->onTimeout([](void* arg, AsyncClient* client, int32_t time) {
+            Serial.printf("Timeout: %d\n", time);
+            client->close();
+        }, nullptr);
+
+        client->onAck([](void* arg, AsyncClient* client, size_t len, int32_t time) {
+            Serial.printf("Ack: %d\n", time);
+            
+        }, nullptr);
+
+        client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
+            Serial.printf("Data: %s\n", (char*)data);
+        }, nullptr);
+
+        client->connect(ipv6, 80);
+
+        #endif
     }
 }
 
@@ -298,20 +296,8 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
             break;
         }
 
-        case 'C' : {
-
-            if (value == 1) {
-                canRequest = true;
-            }
-            else if (value == 0) {
-                canRequest = false;
-            }
-            break;
-        }
-
         case 'R' : {
 
-            if (canRequest) {
                 Serial.printf("Sending request to %s\n", (const char*)&buffer[1]);
                 HTTPClient http;
                 http.begin((const char*)&buffer[1]);
@@ -324,11 +310,7 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
                     Serial.printf("Request failed, error: %s\n", http.errorToString(httpCode).c_str());
                 }
                 http.end();
-            }
-            else {
-                Serial.println("Cannot send request, C0 not received");
-            }
-            break;
+                 break;
         }
 
         case 'T' : {
@@ -675,8 +657,7 @@ void HighWaterMeasurerTask(void* parameter) {
 void setup() {
 
     Serial.begin(115200);
-    uint32_t interval = 1000; // I left it here as an example of passing a parameter to a task instead of using a global variable
-    xTaskCreate(LedBlinker, "ledBlinker", 2048, (void*)&interval, 1, &ledBlinkerTask);
+    xTaskCreate(LedBlinker, "ledBlinker", 2048, NULL, 1, &ledBlinkerTask);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTask);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
     xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTask);
