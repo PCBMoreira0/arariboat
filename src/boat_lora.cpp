@@ -295,6 +295,24 @@ void CockpitDisplayTask(void* parameter) {
     }
 }
 
+void CompanionReaderTask(void* parameter) {
+
+    constexpr int rx_pin = 21;
+    constexpr int tx_pin = 22;
+    constexpr int baud_rate = 9600;
+    Serial2.begin(baud_rate, SERIAL_8N1, rx_pin, tx_pin);
+
+    while (true) {
+        while (Serial2.available()) {
+            Serial.print(Serial.read());
+        }
+        Serial.println();
+        vTaskDelay(25);
+    }
+
+
+}
+
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
 /// @param parameter Unused. Just here to comply with the task function signature.
@@ -319,6 +337,7 @@ void setup() {
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTask);
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayTask);
+    xTaskCreate(CompanionReaderTask, "companionReader", 4096, NULL, 1, NULL);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
