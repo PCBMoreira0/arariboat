@@ -7,20 +7,21 @@
 #include <TFT_eSPI.h>     // Hardware-specific library
 #include <TFT_eWidget.h>  // Widget library
 #include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include <Wire.h> // I2C library for communicating with LoRa32 board.
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
 
-TaskHandle_t ledBlinkerTask = nullptr;
-TaskHandle_t wifiConnectionTask = nullptr;
-TaskHandle_t serverTask = nullptr;
-TaskHandle_t serialReaderTask = nullptr;
-TaskHandle_t cockpitDisplayTask = nullptr;
-TaskHandle_t highWaterMeasurerTask = nullptr;
+TaskHandle_t ledBlinkerHandle = nullptr;
+TaskHandle_t wifiConnectionHandle = nullptr;
+TaskHandle_t serverTaskHandle = nullptr;
+TaskHandle_t serialReaderHandle = nullptr;
+TaskHandle_t cockpitDisplayHandle = nullptr;
+TaskHandle_t highWaterMeasurerHandle = nullptr;
 
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
-TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &serialReaderTask, &cockpitDisplayTask, &highWaterMeasurerTask };
+TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &cockpitDisplayHandle, &highWaterMeasurerHandle };
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
 enum BlinkRate : uint32_t {
@@ -32,7 +33,7 @@ enum BlinkRate : uint32_t {
 
 // Tasks can send notifications here to change the blink rate of the LED in order to communicate the status of the boat.
 void FastBlinkPulse(int pin);
-void LedBlinker(void* parameter) {
+void LedBlinkerTask(void* parameter) {
 
     constexpr int ledPin = 25;
     pinMode(ledPin, OUTPUT);
@@ -79,7 +80,7 @@ void WifiConnectionTask(void* parameter) {
     while (true) {
         if (WiFi.status() != WL_CONNECTED) {
             WiFi.mode(WIFI_STA);
-            xTaskNotify(ledBlinkerTask, BlinkRate::Fast, eSetValueWithOverwrite);
+            xTaskNotify(ledBlinkerHandle, BlinkRate::Fast, eSetValueWithOverwrite);
             for (auto& wifi : wifiCredentials) {
                 WiFi.begin(wifi.first, wifi.second);
                 Serial.printf("Trying to connect to %s\n", wifi.first);
@@ -95,8 +96,8 @@ void WifiConnectionTask(void* parameter) {
                 }
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial.printf("Connected to %s\nIP: %s\n", wifi.first, WiFi.localIP().toString().c_str());
-                    xTaskNotify(ledBlinkerTask, BlinkRate::Slow, eSetValueWithOverwrite);
-                    xTaskNotifyGive(serverTask);
+                    xTaskNotify(ledBlinkerHandle, BlinkRate::Slow, eSetValueWithOverwrite);
+                    xTaskNotifyGive(serverTaskHandle);
                     break;
                 }
             }          
@@ -187,7 +188,7 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 
                 auto it = blinkRateMap.find(buffer[1]);
                 if (it != blinkRateMap.end()) {
-                    xTaskNotify(ledBlinkerTask, (uint32_t)it->second, eSetValueWithOverwrite);
+                    xTaskNotify(ledBlinkerHandle, (uint32_t)it->second, eSetValueWithOverwrite);
                     Serial.printf("Blink rate set to %c\n", buffer[1]);
                     break;
                 }
@@ -299,18 +300,25 @@ void CompanionReaderTask(void* parameter) {
 
     constexpr int rx_pin = 21;
     constexpr int tx_pin = 22;
-    constexpr int baud_rate = 9600;
+    constexpr int baud_rate = 115200;
     Serial2.begin(baud_rate, SERIAL_8N1, rx_pin, tx_pin);
 
     while (true) {
-        while (Serial2.available()) {
-            Serial.print(Serial.read());
-        }
+
+        if (Serial2.available()) {
+            while (Serial2.available()) {
+                Serial.print(Serial.read());
+            }
         Serial.println();
+        }
         vTaskDelay(25);
+
+        static uint32_t update_time = 0;
+        if (millis() - update_time >= 5000) {
+            update_time = millis();
+            Serial.println("CompanionReader heartbeat");
+        }
     }
-
-
 }
 
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
@@ -332,11 +340,11 @@ void HighWaterMeasurerTask(void* parameter) {
 void setup() {
 
     Serial.begin(115200);
-    xTaskCreate(LedBlinker, "ledBlinker", 2048, NULL, 1, &ledBlinkerTask);
-    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionTask);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
-    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTask);
-    xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayTask);
+    xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
+    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
+    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
+    xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
     xTaskCreate(CompanionReaderTask, "companionReader", 4096, NULL, 1, NULL);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
