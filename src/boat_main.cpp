@@ -16,18 +16,18 @@
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
 
-TaskHandle_t ledBlinkerTask = nullptr;
-TaskHandle_t wifiConnectionTask = nullptr;
-TaskHandle_t serverTask = nullptr;
+TaskHandle_t ledBlinkerHandle = nullptr;
+TaskHandle_t wifiConnectionHandle = nullptr;
+TaskHandle_t serverTaskHandle = nullptr;
 TaskHandle_t vpnConnectionTask = nullptr;
-TaskHandle_t serialReaderTask = nullptr;
+TaskHandle_t serialReaderHandle = nullptr;
 TaskHandle_t temperatureReaderTask = nullptr;
 TaskHandle_t gpsReaderTask = nullptr;
 TaskHandle_t instrumentationReaderTask = nullptr;
-TaskHandle_t highWaterMeasurerTask = nullptr;
+TaskHandle_t highWaterMeasurerHandle = nullptr;
 
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
-TaskHandle_t* taskHandles[] = { &ledBlinkerTask, &wifiConnectionTask, &serverTask, &vpnConnectionTask, &serialReaderTask, &temperatureReaderTask, &gpsReaderTask, &instrumentationReaderTask, &highWaterMeasurerTask};
+TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &wifiConnectionHandle, &serverTaskHandle, &vpnConnectionTask, &serialReaderHandle, &temperatureReaderTask, &gpsReaderTask, &instrumentationReaderTask, &highWaterMeasurerHandle};
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
 enum BlinkRate : uint32_t {
@@ -92,7 +92,7 @@ void WifiConnectionTask(void* parameter) {
     while (true) {
         if (WiFi.status() != WL_CONNECTED) {
             WiFi.mode(WIFI_STA);
-            xTaskNotify(ledBlinkerTask, BlinkRate::Fast, eSetValueWithOverwrite);
+            xTaskNotify(ledBlinkerHandle, BlinkRate::Fast, eSetValueWithOverwrite);
             for (auto& wifi : wifiCredentials) {
                 WiFi.begin(wifi.first, wifi.second);
                 Serial.printf("Trying to connect to %s\n", wifi.first);
@@ -108,8 +108,8 @@ void WifiConnectionTask(void* parameter) {
                 }
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial.println("Connected to WiFi");
-                    xTaskNotify(ledBlinkerTask, BlinkRate::Slow, eSetValueWithOverwrite);
-                    xTaskNotifyGive(serverTask);
+                    xTaskNotify(ledBlinkerHandle, BlinkRate::Slow, eSetValueWithOverwrite);
+                    xTaskNotifyGive(serverTaskHandle);
                     break;
                 }
             }          
@@ -285,7 +285,7 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 
                 auto it = blinkRateMap.find(buffer[1]);
                 if (it != blinkRateMap.end()) {
-                    xTaskNotify(ledBlinkerTask, (uint32_t)it->second, eSetValueWithOverwrite);
+                    xTaskNotify(ledBlinkerHandle, (uint32_t)it->second, eSetValueWithOverwrite);
                     Serial.printf("Blink rate set to %c\n", buffer[1]);
                     break;
                 }
@@ -518,14 +518,14 @@ void InstrumentationReaderTask(void* parameter) {
     bool is_adc_initialized = false;
     
     while (!is_adc_initialized) {
-        xTaskNotify(ledBlinkerTask, BlinkRate::Fast, eSetValueWithOverwrite); // Blinks the LED to indicate that the ADC is not initialized yet.
+        xTaskNotify(ledBlinkerHandle, BlinkRate::Fast, eSetValueWithOverwrite); // Blinks the LED to indicate that the ADC is not initialized yet.
         for (auto address : adc_addresses) {
             Serial.printf("Trying to initialize ADS1115 at address 0x%x\n", address);
             if (adc.begin(address)) {
                 Serial.printf("ADS1115 successfully initialized at address 0x%x\n", address);
                 is_adc_initialized = true;
-                xTaskNotify(ledBlinkerTask, BlinkRate::Pulse, eSetValueWithOverwrite); // Pulse the LED to indicate that the ADC is initialized.
-                xTaskNotify(ledBlinkerTask, BlinkRate::Slow, eSetValueWithOverwrite); // Return LED to default blink rate.
+                xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Pulse the LED to indicate that the ADC is initialized.
+                xTaskNotify(ledBlinkerHandle, BlinkRate::Slow, eSetValueWithOverwrite); // Return LED to default blink rate.
                 break;
             }
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -670,11 +670,11 @@ void HighWaterMeasurerTask(void* parameter) {
 void setup() {
 
     Serial.begin(115200);
-    xTaskCreate(LedBlinker, "ledBlinker", 2048, NULL, 1, &ledBlinkerTask);
-    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTask);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTask);
+    xTaskCreate(LedBlinker, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
+    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTask);
-    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTask);
+    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTask);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTask);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTask);
