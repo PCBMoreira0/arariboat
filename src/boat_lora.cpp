@@ -298,28 +298,40 @@ void CockpitDisplayTask(void* parameter) {
 
 void CompanionReaderTask(void* parameter) {
 
-    constexpr int rx_pin = 21;
-    constexpr int tx_pin = 22;
-    constexpr int baud_rate = 115200;
-    Serial2.begin(baud_rate, SERIAL_8N1, rx_pin, tx_pin);
-
     while (true) {
+        // Using Serial2 bugs.
+        // Trying with Serial0
+        mavlink_message_t message;
+        mavlink_status_t status;
 
-        if (Serial2.available()) {
-            while (Serial2.available()) {
-                Serial.print(Serial.read());
+        if (Serial.available()) {
+            while (Serial.available()) {
+                uint8_t received_byte = Serial.read();
+                if (mavlink_parse_char(MAVLINK_COMM_0, received_byte, &message, &status)) {
+                    Serial.print('\n');
+                    switch (message.msgid) {
+                    case MAVLINK_MSG_ID_HEARTBEAT:
+                        Serial.printf("Received heartbeat from channel 0\n");
+                        Serial.printf("[SYS ID]: %d [COMP ID]: %d\n", message.sysid, message.compid);
+                        break;
+                    default:
+                        Serial.printf("Received message with ID #%d from channel 0\n", message.msgid);
+                        break;
+                    }
+                }
             }
         Serial.println();
         }
-        vTaskDelay(25);
 
         static uint32_t update_time = 0;
-        if (millis() - update_time >= 5000) {
+        if (millis() - update_time >= 10000) {
             update_time = millis();
-            Serial.println("CompanionReader heartbeat");
+            Serial.printf("Waiting for MAVlink...\n");
         }
+        vTaskDelay(25);
     }
 }
+
 
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
@@ -343,7 +355,7 @@ void setup() {
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
-    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
+    //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
     xTaskCreate(CompanionReaderTask, "companionReader", 4096, NULL, 1, NULL);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
