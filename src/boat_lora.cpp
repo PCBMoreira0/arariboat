@@ -320,7 +320,6 @@ void CompanionReaderTask(void* parameter) {
                     }
                 }
             }
-        Serial.println();
         }
 
         static uint32_t update_time = 0;
