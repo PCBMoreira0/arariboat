@@ -24,6 +24,21 @@ TaskHandle_t highWaterMeasurerHandle = nullptr;
 TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &cockpitDisplayHandle, &highWaterMeasurerHandle };
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
+class SystemData {
+public:
+     float voltage_battery;
+     float current_motor;
+     float current_battery;
+     float current_mppt;
+     float aux_voltage_battery;
+     float latitude;
+     float longitude;
+     bool is_pump_port_on;
+     bool is_pump_starboard_on;
+};
+
+SystemData systemData = { 48.0f, 0.0f, 0.0f, 0.0f, 0.0f, -22.909378f, -43.117346f, false, false };
+
 enum BlinkRate : uint32_t {
     Slow = 1000,
     Medium = 500,
@@ -260,38 +275,57 @@ void CockpitDisplayTask(void* parameter) {
     widget_mppt_current.analogMeter(240, 180, mppt_amps_zero_scale, mppt_amps_full_scale, "A", "0", "10", "20", "30", "40"); 
   
     while (true) {
-        static float angle = 0.0f;
-        static uint32_t update_time = 0;  
         constexpr int loop_period = 35; // Display updates every 35 ms
-        constexpr float radians_to_degrees = 3.14159265358979323846 / 180.0;
+        static uint32_t update_time = 0;  
 
-        if (millis() - update_time >= loop_period) {
-            update_time = millis();
-            angle += 4; if (angle > 360) angle = 0;
+        auto test_sine_wave = [&]() {
+            static uint32_t test_update_time = 0;
+            static float angle = 0.0f;
+            constexpr float radians_to_degrees = 3.14159265358979323846 / 180.0;
 
-            // Create a Sine wave for testing, value is in range 0 - 100
-            float value = 50.0 + 50.0 * sin(angle * radians_to_degrees);
+            if (millis() - test_update_time > loop_period) {
+                test_update_time = millis();
+                angle += 4; if (angle > 360) angle = 0;
 
-            auto mapValue = [](float ip, float ipmin, float ipmax, float tomin, float tomax) {
-                return (ip - ipmin) * (tomax - tomin) / (ipmax - ipmin) + tomin;
-            };
+                // Create a Sine wave for testing, value is in range 0 - 100
+                float value = 50.0 + 50.0 * sin(angle * radians_to_degrees);
 
-            float battery_current;
-            battery_current = mapValue(value, (float)0.0, (float)100.0, battery_amps_zero_scale, battery_amps_full_scale);
-            widget_battery_current.updateNeedle(battery_current, 0);
+                auto mapValue = [](float ip, float ipmin, float ipmax, float tomin, float tomax) {
+                    return (ip - ipmin) * (tomax - tomin) / (ipmax - ipmin) + tomin;
+                };
 
-            float battery_voltage;
-            battery_voltage = mapValue(value, (float)0.0, (float)100.0, battery_volts_zero_scale, battery_volts_full_scale);
-            widget_battery_volts.updateNeedle(battery_voltage, 0);
+                float battery_current;
+                battery_current = mapValue(value, (float)0.0, (float)100.0, battery_amps_zero_scale, battery_amps_full_scale);
+                widget_battery_current.updateNeedle(battery_current, 0);
 
-            float motor_current;
-            motor_current = mapValue(value, (float)0.0, (float)100.0, motor_amps_zero_scale, motor_amps_full_scale);
-            widget_motor_current.updateNeedle(motor_current, 0);
+                float battery_voltage;
+                battery_voltage = mapValue(value, (float)0.0, (float)100.0, battery_volts_zero_scale, battery_volts_full_scale);
+                widget_battery_volts.updateNeedle(battery_voltage, 0);
 
-            float mppt_current;
-            mppt_current = mapValue(value, (float)0.0, (float)100.0, mppt_amps_zero_scale, mppt_amps_full_scale);
-            widget_mppt_current.updateNeedle(mppt_current, 0);
-        }
+                float motor_current;
+                motor_current = mapValue(value, (float)0.0, (float)100.0, motor_amps_zero_scale, motor_amps_full_scale);
+                widget_motor_current.updateNeedle(motor_current, 0);
+
+                float mppt_current;
+                mppt_current = mapValue(value, (float)0.0, (float)100.0, mppt_amps_zero_scale, mppt_amps_full_scale);
+                widget_mppt_current.updateNeedle(mppt_current, 0);
+            }
+        };
+
+        // Use data from SystemData static class to update the display
+
+        auto update_display = [&]() {
+            if (millis() - update_time > loop_period) {
+                update_time = millis();
+
+                widget_battery_volts.updateNeedle(systemData.voltage_battery, 0);
+                widget_battery_current.updateNeedle(systemData.current_motor, 0);
+                widget_motor_current.updateNeedle(systemData.current_battery , 0);
+                widget_mppt_current.updateNeedle(systemData.current_mppt, 0);
+            }
+        };
+
+        update_display();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -313,6 +347,22 @@ void CompanionReaderTask(void* parameter) {
                     case MAVLINK_MSG_ID_HEARTBEAT:
                         Serial.printf("Received heartbeat from channel 0\n");
                         Serial.printf("[SYS ID]: %d [COMP ID]: %d\n", message.sysid, message.compid);
+                        break;
+                    case MAVLINK_MSG_ID_INSTRUMENTATION:
+                        Serial.printf("Received instrumentation from channel 0\n");
+                        Serial.printf("[SYS ID]: %d [COMP ID]: %d\n", message.sysid, message.compid);
+                        mavlink_instrumentation_t instrumentation;
+                        mavlink_msg_instrumentation_decode(&message, &instrumentation);
+
+                        systemData.voltage_battery = instrumentation.voltage_battery;
+                        systemData.current_motor   = instrumentation.current_zero;
+                        systemData.current_battery = instrumentation.current_one;
+                        systemData.current_mppt    = instrumentation.current_two;
+
+                        Serial.printf("Battery voltage: %f\n", systemData.voltage_battery);
+                        Serial.printf("Motor current: %f\n", systemData.current_motor);
+                        Serial.printf("Battery current: %f\n", systemData.current_battery);
+                        Serial.printf("MPPT current: %f\n", systemData.current_mppt);
                         break;
                     default:
                         Serial.printf("Received message with ID #%d from channel 0\n", message.msgid);
