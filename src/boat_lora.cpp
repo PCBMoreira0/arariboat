@@ -46,6 +46,13 @@ enum BlinkRate : uint32_t {
     Pulse = 100
 };
 
+#define DEBUG // Uncomment to enable debug messages.
+#ifdef DEBUG
+#define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
+#else
+#define DEBUG_PRINTF(message, ...)
+#endif
+
 // Tasks can send notifications here to change the blink rate of the LED in order to communicate the status of the boat.
 void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
@@ -330,47 +337,54 @@ void CockpitDisplayTask(void* parameter) {
     }
 }
 
+void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
+
+    mavlink_message_t message;
+    mavlink_status_t status;
+
+    while (byte_stream.available()) {
+        uint8_t received_byte = byte_stream.read();
+        if (mavlink_parse_char(channel, received_byte, &message, &status)) {
+            Serial.print('\n');
+            switch (message.msgid) {
+                case MAVLINK_MSG_ID_HEARTBEAT: {    
+                    DEBUG_PRINTF("Received heartbeat from channel %d\n", channel);
+                    break;
+                }
+                case MAVLINK_MSG_ID_INSTRUMENTATION: {
+                    Serial.printf("Received instrumentation from channel %d\n", channel);
+                    mavlink_instrumentation_t instrumentation;
+                    mavlink_msg_instrumentation_decode(&message, &instrumentation);
+
+                    systemData.voltage_battery = instrumentation.voltage_battery;
+                    systemData.current_motor   = instrumentation.current_zero;
+                    systemData.current_battery = instrumentation.current_one;
+                    systemData.current_mppt    = instrumentation.current_two;
+
+                    DEBUG_PRINTF("Battery voltage: %f\n", systemData.voltage_battery);
+                    DEBUG_PRINTF("Motor current: %f\n", systemData.current_motor);
+                    DEBUG_PRINTF("Battery current: %f\n", systemData.current_battery);
+                    DEBUG_PRINTF("MPPT current: %f\n", systemData.current_mppt);
+                    break;
+                }
+                default: {
+                    Serial.printf("Received message with ID #%d from channel %d\n", message.msgid, channel);
+                    break;
+                }
+            }
+            // Route received message to serial port
+            
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+            Serial.write(buffer, len);
+        }
+    }
+}
+
 void CompanionReaderTask(void* parameter) {
 
     while (true) {
-        // Using Serial2 bugs.
-        // Trying with Serial0
-        mavlink_message_t message;
-        mavlink_status_t status;
-
-        if (Serial.available()) {
-            while (Serial.available()) {
-                uint8_t received_byte = Serial.read();
-                if (mavlink_parse_char(MAVLINK_COMM_0, received_byte, &message, &status)) {
-                    Serial.print('\n');
-                    switch (message.msgid) {
-                    case MAVLINK_MSG_ID_HEARTBEAT:
-                        Serial.printf("Received heartbeat from channel 0\n");
-                        Serial.printf("[SYS ID]: %d [COMP ID]: %d\n", message.sysid, message.compid);
-                        break;
-                    case MAVLINK_MSG_ID_INSTRUMENTATION:
-                        Serial.printf("Received instrumentation from channel 0\n");
-                        Serial.printf("[SYS ID]: %d [COMP ID]: %d\n", message.sysid, message.compid);
-                        mavlink_instrumentation_t instrumentation;
-                        mavlink_msg_instrumentation_decode(&message, &instrumentation);
-
-                        systemData.voltage_battery = instrumentation.voltage_battery;
-                        systemData.current_motor   = instrumentation.current_zero;
-                        systemData.current_battery = instrumentation.current_one;
-                        systemData.current_mppt    = instrumentation.current_two;
-
-                        Serial.printf("Battery voltage: %f\n", systemData.voltage_battery);
-                        Serial.printf("Motor current: %f\n", systemData.current_motor);
-                        Serial.printf("Battery current: %f\n", systemData.current_battery);
-                        Serial.printf("MPPT current: %f\n", systemData.current_mppt);
-                        break;
-                    default:
-                        Serial.printf("Received message with ID #%d from channel 0\n", message.msgid);
-                        break;
-                    }
-                }
-            }
-        }
+        ProcessStreamChannel(Serial, MAVLINK_COMM_0);
 
         static uint32_t update_time = 0;
         if (millis() - update_time >= 10000) {
@@ -381,6 +395,48 @@ void CompanionReaderTask(void* parameter) {
     }
 }
 
+void ReceiveI2CMessage(int number_bytes) {
+    Serial.printf("Received %d bytes from [I2C]\n", number_bytes);
+    while (Wire.available()) {
+        mavlink_message_t message;
+        mavlink_status_t status;
+        uint8_t received_byte = Wire.read();
+        Serial.printf("Received byte: %d\n", received_byte);
+        if (mavlink_parse_char(MAVLINK_COMM_1, received_byte, &message, &status)) {
+            Serial.print('\n');
+            switch (message.msgid) {
+                case MAVLINK_MSG_ID_HEARTBEAT: {    
+                    DEBUG_PRINTF("Received heartbeat from channel %d\n", MAVLINK_COMM_1);
+                    break;
+                }
+                case MAVLINK_MSG_ID_INSTRUMENTATION: {
+                    DEBUG_PRINTF("Received instrumentation from channel %d\n", MAVLINK_COMM_1);
+                    mavlink_instrumentation_t instrumentation;
+                    mavlink_msg_instrumentation_decode(&message, &instrumentation);
+
+                    systemData.voltage_battery = instrumentation.voltage_battery;
+                    systemData.current_motor   = instrumentation.current_zero;
+                    systemData.current_battery = instrumentation.current_one;
+                    systemData.current_mppt    = instrumentation.current_two;
+
+                    DEBUG_PRINTF("Battery voltage: %f\n", systemData.voltage_battery);
+                    DEBUG_PRINTF("Motor current: %f\n", systemData.current_motor);
+                    DEBUG_PRINTF("Battery current: %f\n", systemData.current_battery);
+                    DEBUG_PRINTF("MPPT current: %f\n", systemData.current_mppt);
+                    break;
+                }
+                default: {
+                    Serial.printf("Received message with ID #%d from channel 1\n", message.msgid);
+                    break;
+                }
+            }
+            // Route received message to serial port
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+            Serial.write(buffer, len);
+        }
+    }
+}
 
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
@@ -398,6 +454,8 @@ void HighWaterMeasurerTask(void* parameter) {
     }
 }
 
+
+
 void setup() {
 
     Serial.begin(115200);
@@ -408,10 +466,11 @@ void setup() {
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
     xTaskCreate(CompanionReaderTask, "companionReader", 4096, NULL, 1, NULL);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
+    Wire.begin(0x04);
+    Wire.setBufferSize(MAVLINK_MAX_PACKET_LEN);
+    Wire.onReceive([](int number_bytes) { ProcessStreamChannel(Wire, MAVLINK_COMM_1);});
 }
-
 void loop() {
-
 
 }
 
