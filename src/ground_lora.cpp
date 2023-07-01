@@ -8,20 +8,22 @@
 #include <TFT_eWidget.h>  // Widget library
 #include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 #include <Wire.h> // I2C library for communicating with LoRa32 board.
+#include <LoRa.h> // SandeepMistry physical layer library
+#include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
 
 TaskHandle_t ledBlinkerHandle = nullptr;
+TaskHandle_t displayScreenHandle = nullptr;
 TaskHandle_t wifiConnectionHandle = nullptr;
 TaskHandle_t serverTaskHandle = nullptr;
 TaskHandle_t serialReaderHandle = nullptr;
-TaskHandle_t cockpitDisplayHandle = nullptr;
 TaskHandle_t highWaterMeasurerHandle = nullptr;
 
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
-TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &cockpitDisplayHandle, &highWaterMeasurerHandle };
+TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &displayScreenHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &highWaterMeasurerHandle };
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
 class SystemData {
@@ -230,113 +232,6 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
     }
 }
 
-// For some reason, the display gets a bug if I declare the display objects inside the task, so I declare them here
-// with static storage duration instead of using the default thread storage duration of the task.
-TFT_eSPI tft_display = TFT_eSPI(); // Object to control the TFT display
-MeterWidget widget_battery_volts    = MeterWidget(&tft_display);
-MeterWidget widget_battery_current  = MeterWidget(&tft_display);
-MeterWidget widget_motor_current    = MeterWidget(&tft_display);
-MeterWidget widget_mppt_current     = MeterWidget(&tft_display);
-
-void CockpitDisplayTask(void* parameter) {
-
-    //Needs Font 2 (also Font 4 if using large scale label)
-    //Make sure all the display driver and pin connections are correct by
-    //editing the User_Setup.h file in the TFT_eSPI library folder.
-
-    constexpr float battery_volts_full_scale = 54.0;
-    constexpr float battery_volts_zero_scale = 48.0;
-    constexpr float battery_amps_full_scale = 60.0;
-    constexpr float battery_amps_zero_scale = 0.0;
-    constexpr float motor_amps_full_scale = 60.0;
-    constexpr float motor_amps_zero_scale = 0.0;
-    constexpr float mppt_amps_full_scale = 40.0;
-    constexpr float mppt_amps_zero_scale = 0.0;
-    constexpr float widget_length = 239.0f;
-    constexpr float widget_height = 126.0f;
-
-    tft_display.init();
-    tft_display.setRotation(3);
-    tft_display.fillScreen(TFT_BLACK);
-    tft_display.drawString("Corrente-Bateria", 240 + widget_length / 7, 2, 4);
-    tft_display.drawString("Tensao-Bateria", widget_length / 7, 2, 4);
-    tft_display.drawString("Corrente-Motor", widget_length / 7, 160, 4);
-    tft_display.drawString("Corrente-MPPT", 240 + widget_length / 7, 160, 4);
-
-    // Colour zones are set as a start and end percentage of full scale (0-100)
-    // If start and end of a colour zone are the same then that colour is not used
-    //                              -Red-   -Org-  -Yell-  -Grn-
-    widget_battery_volts.setZones(0, 100, 15, 25, 0, 0, 25, 100);
-    widget_battery_volts.analogMeter(0, 30, battery_volts_zero_scale, battery_volts_full_scale, "V", "48.0", "49.5", "51.0", "52.5", "54.0"); 
-
-    //                              --Red--  -Org-   -Yell-  -Grn-
-    widget_battery_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
-    widget_battery_current.analogMeter(240, 30, battery_amps_zero_scale, battery_amps_full_scale, "A", "0", "15", "30", "45", "60"); 
-
-    //                              -Red-   -Org-  -Yell-  -Grn-
-    widget_motor_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
-    widget_motor_current.analogMeter(0, 180, motor_amps_zero_scale, motor_amps_full_scale, "A", "0", "15", "30", "45", "60"); 
-
-    //                           -Red-   -Org-  -Yell-  -Grn-
-    widget_mppt_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
-    widget_mppt_current.analogMeter(240, 180, mppt_amps_zero_scale, mppt_amps_full_scale, "A", "0", "10", "20", "30", "40"); 
-  
-    while (true) {
-        constexpr int loop_period = 35; // Display updates every 35 ms
-        static uint32_t update_time = 0;  
-
-        auto test_sine_wave = [&]() {
-            static uint32_t test_update_time = 0;
-            static float angle = 0.0f;
-            constexpr float radians_to_degrees = 3.14159265358979323846 / 180.0;
-
-            if (millis() - test_update_time > loop_period) {
-                test_update_time = millis();
-                angle += 4; if (angle > 360) angle = 0;
-
-                // Create a Sine wave for testing, value is in range 0 - 100
-                float value = 50.0 + 50.0 * sin(angle * radians_to_degrees);
-
-                auto mapValue = [](float ip, float ipmin, float ipmax, float tomin, float tomax) {
-                    return (ip - ipmin) * (tomax - tomin) / (ipmax - ipmin) + tomin;
-                };
-
-                float battery_current;
-                battery_current = mapValue(value, (float)0.0, (float)100.0, battery_amps_zero_scale, battery_amps_full_scale);
-                widget_battery_current.updateNeedle(battery_current, 0);
-
-                float battery_voltage;
-                battery_voltage = mapValue(value, (float)0.0, (float)100.0, battery_volts_zero_scale, battery_volts_full_scale);
-                widget_battery_volts.updateNeedle(battery_voltage, 0);
-
-                float motor_current;
-                motor_current = mapValue(value, (float)0.0, (float)100.0, motor_amps_zero_scale, motor_amps_full_scale);
-                widget_motor_current.updateNeedle(motor_current, 0);
-
-                float mppt_current;
-                mppt_current = mapValue(value, (float)0.0, (float)100.0, mppt_amps_zero_scale, mppt_amps_full_scale);
-                widget_mppt_current.updateNeedle(mppt_current, 0);
-            }
-        };
-
-        // Use data from SystemData static class to update the display
-
-        auto update_display = [&]() {
-            if (millis() - update_time > loop_period) {
-                update_time = millis();
-
-                widget_battery_volts.updateNeedle(systemData.voltage_battery, 0);
-                widget_battery_current.updateNeedle(systemData.current_motor, 0);
-                widget_motor_current.updateNeedle(systemData.current_battery , 0);
-                widget_mppt_current.updateNeedle(systemData.current_mppt, 0);
-            }
-        };
-
-        update_display();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
-
 void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
 
     mavlink_message_t message;
@@ -381,7 +276,7 @@ void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
     }
 }
 
-void CompanionReaderTask(void* parameter) {
+void ChannelReaderTask(void* parameter) {
 
     while (true) {
         ProcessStreamChannel(Serial, MAVLINK_COMM_0);
@@ -389,52 +284,36 @@ void CompanionReaderTask(void* parameter) {
         static uint32_t update_time = 0;
         if (millis() - update_time >= 10000) {
             update_time = millis();
-            Serial.printf("Waiting for MAVlink...\n");
+            Serial.printf("Waiting for MAVlink messages on channel %d\n", MAVLINK_COMM_0);
         }
         vTaskDelay(25);
     }
 }
 
-void ReceiveI2CMessage(int number_bytes) {
-    Serial.printf("Received %d bytes from [I2C]\n", number_bytes);
-    while (Wire.available()) {
-        mavlink_message_t message;
-        mavlink_status_t status;
-        uint8_t received_byte = Wire.read();
-        Serial.printf("Received byte: %d\n", received_byte);
-        if (mavlink_parse_char(MAVLINK_COMM_1, received_byte, &message, &status)) {
-            Serial.print('\n');
-            switch (message.msgid) {
-                case MAVLINK_MSG_ID_HEARTBEAT: {    
-                    DEBUG_PRINTF("Received heartbeat from channel %d\n", MAVLINK_COMM_1);
-                    break;
-                }
-                case MAVLINK_MSG_ID_INSTRUMENTATION: {
-                    DEBUG_PRINTF("Received instrumentation from channel %d\n", MAVLINK_COMM_1);
-                    mavlink_instrumentation_t instrumentation;
-                    mavlink_msg_instrumentation_decode(&message, &instrumentation);
+/// @brief Task that controls the the 128x64 OLED display via I2C communication.
+/// @param parameter 
+void DisplayScreenTask(void* parameter) {
 
-                    systemData.voltage_battery = instrumentation.voltage_battery;
-                    systemData.current_motor   = instrumentation.current_zero;
-                    systemData.current_battery = instrumentation.current_one;
-                    systemData.current_mppt    = instrumentation.current_two;
+    //Begins the integrated 128x64 OLED display with the I2C Wire interface.
+    //The display is cleared and an introduction message is displayed.
+    //The screen is also capable of drawing lines, rectangles, circles, and bitmaps.
 
-                    DEBUG_PRINTF("Battery voltage: %f\n", systemData.voltage_battery);
-                    DEBUG_PRINTF("Motor current: %f\n", systemData.current_motor);
-                    DEBUG_PRINTF("Battery current: %f\n", systemData.current_battery);
-                    DEBUG_PRINTF("MPPT current: %f\n", systemData.current_mppt);
-                    break;
-                }
-                default: {
-                    Serial.printf("Received message with ID #%d from channel 1\n", message.msgid);
-                    break;
-                }
-            }
-            // Route received message to serial port
-            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-            Serial.write(buffer, len);
-        }
+    constexpr uint8_t address = 0x3C;
+    constexpr uint8_t sda_pin = 21;
+    constexpr uint8_t scl_pin = 22;
+    SSD1306Wire screen(address, sda_pin, scl_pin); // SSD1306 128x64 OLED display with I2C Wire interface
+
+    screen.init();
+    screen.flipScreenVertically(); // Flip screen for debugging
+    screen.clear();
+    screen.setFont(ArialMT_Plain_10);
+    screen.setTextAlignment(TEXT_ALIGN_CENTER);
+    screen.drawString(screen.getWidth() / 2, screen.getHeight() / 2, "Lora Receiver");
+    screen.display();
+    delay(2000);
+
+    while (true) {
+        vTaskDelay(1000);
     }
 }
 
@@ -460,15 +339,12 @@ void setup() {
 
     Serial.begin(115200);
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
+    xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, &displayScreenHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
-    xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
-    xTaskCreate(CompanionReaderTask, "companionReader", 4096, NULL, 1, NULL);
+    xTaskCreate(ChannelReaderTask, "companionReader", 4096, NULL, 1, NULL);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
-    Wire.begin(0x04);
-    Wire.setBufferSize(MAVLINK_MAX_PACKET_LEN);
-    Wire.onReceive([](int number_bytes) { ProcessStreamChannel(Wire, MAVLINK_COMM_1);});
 }
 void loop() {
 

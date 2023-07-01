@@ -2,11 +2,11 @@ from platformio.public import DeviceMonitorFilterBase
 
 # Make terminal output color cyan
 class MyFilter(DeviceMonitorFilterBase):
-    NAME = "color-cyan"
+    NAME = "color-blue"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print("Cyan color filter has loaded")
+        print("Blue color filter has loaded")
         self.buffer = ""
     
     def tx(self, text):
