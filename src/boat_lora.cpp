@@ -8,6 +8,8 @@
 #include <TFT_eWidget.h>  // Widget library
 #include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 #include <Wire.h> // I2C library for communicating with LoRa32 board.
+#include <LoRa.h> // SandeepMistry physical layer library
+#include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -377,11 +379,14 @@ void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
             uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
             uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
             Serial.write(buffer, len);
+            LoRa.beginPacket();
+            LoRa.write(buffer, len);
+            LoRa.endPacket();
         }
     }
 }
 
-void CompanionReaderTask(void* parameter) {
+void ChannelReaderTask(void* parameter) {
 
     while (true) {
         ProcessStreamChannel(Serial, MAVLINK_COMM_0);
@@ -454,17 +459,26 @@ void HighWaterMeasurerTask(void* parameter) {
     }
 }
 
-
+void StartLora() {
+    LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
+    LoRa.setSyncWord(0xFD);
+    while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
+        Serial.println("Starting LoRa failed!");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    Serial.println("Starting LoRa succeeded!");
+}
 
 void setup() {
 
     Serial.begin(115200);
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
+    StartLora();
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
-    xTaskCreate(CompanionReaderTask, "companionReader", 4096, NULL, 1, NULL);
+    xTaskCreate(ChannelReaderTask, "companionReader", 4096, NULL, 1, NULL);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
     Wire.begin(0x04);
     Wire.setBufferSize(MAVLINK_MAX_PACKET_LEN);
