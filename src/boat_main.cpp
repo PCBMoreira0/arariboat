@@ -11,6 +11,7 @@
 #include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 #include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain amplifier Analog-Digital Converter for measuring current and voltage.
 #include <SPI.h> // Required for the ADS1115 ADC.
+#include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -45,7 +46,7 @@ enum GPSPrintOptions {
 
 // Tasks can send notifications here to change the blink rate of the LED in order to communicate the status of the boat.
 void FastBlinkPulse(int pin);
-void LedBlinker(void* parameter) {
+void LedBlinkerTask(void* parameter) {
 
     constexpr int ledPin = 2;
     pinMode(ledPin, OUTPUT);
@@ -136,6 +137,7 @@ void ServerTask(void* parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         ESP.restart();
     });
+    
 
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -146,7 +148,7 @@ void ServerTask(void* parameter) {
     xTaskNotifyGive(vpnConnectionTaskHandle); // Notify VPN connection task that server is running
 
     while (true) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        ulTaskNotifyTake(pdTRUE, 500);
         //#define USE_ASYNC_CLIENT 
         #ifdef USE_ASYNC_CLIENT
         // Get home host from husarnet list of peers
@@ -517,14 +519,13 @@ void InstrumentationReaderTask(void* parameter) {
             if (adc.begin(address)) {
                 Serial.printf("ADS1115 successfully initialized at address 0x%x\n", address);
                 is_adc_initialized = true;
-                xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Pulse the LED to indicate that the ADC is initialized.
                 xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite); // Return LED to default blink rate.
                 break;
             }
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
-
+    
     while (true) {
         // Check and confirm which values of resistors are being used on the board.
         constexpr float voltage_conversion_ratio = 2.59081f; // Datasheet gives a reference value of 2.50, but here it is being used an iterative process to find a value that satisfies the conversion measurements.
@@ -567,6 +568,9 @@ void InstrumentationReaderTask(void* parameter) {
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
 
+        Wire.beginTransmission(0x04);
+        Wire.write(buffer, len);
+        Wire.endTransmission();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -650,11 +654,12 @@ void HighWaterMeasurerTask(void* parameter) {
 void setup() {
 
     Serial.begin(115200);
-    xTaskCreate(LedBlinker, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
+    Wire.begin(); // Master mode
+    xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
-    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
+    //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTaskHandle);
