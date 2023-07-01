@@ -20,10 +20,13 @@ TaskHandle_t displayScreenHandle = nullptr;
 TaskHandle_t wifiConnectionHandle = nullptr;
 TaskHandle_t serverTaskHandle = nullptr;
 TaskHandle_t serialReaderHandle = nullptr;
+TaskHandle_t loraReceiverHandle = nullptr;
 TaskHandle_t highWaterMeasurerHandle = nullptr;
 
+QueueHandle_t mavlinkQueue = nullptr;
+
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
-TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &displayScreenHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &highWaterMeasurerHandle };
+TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &displayScreenHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &loraReceiverHandle, &highWaterMeasurerHandle };
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
 class SystemData {
@@ -37,15 +40,23 @@ public:
      float longitude;
      bool is_pump_port_on;
      bool is_pump_starboard_on;
+     uint8_t mavlink_channel_flags;
 };
 
-SystemData systemData = { 48.0f, 0.0f, 0.0f, 0.0f, 0.0f, -22.909378f, -43.117346f, false, false };
+SystemData systemData = { 48.0f, 0.0f, 0.0f, 0.0f, 0.0f, -22.909378f, -43.117346f, false, false, 0x00};
 
 enum BlinkRate : uint32_t {
     Slow = 1000,
     Medium = 500,
     Fast = 100,
     Pulse = 100
+};
+
+enum LoraStatus : uint32_t {
+    Failed,
+    Idle,
+    Sending,
+    Receiving
 };
 
 #define DEBUG // Uncomment to enable debug messages.
@@ -232,7 +243,7 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
     }
 }
 
-void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
+bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
 
     mavlink_message_t message;
     mavlink_status_t status;
@@ -272,22 +283,63 @@ void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
             uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
             uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
             Serial.write(buffer, len);
+            return true;
         }
+    }
+    return false;
+}
+
+struct SerialChannelReaderParams {
+    HardwareSerial& serial_stream;
+    mavlink_channel_t channel;
+};
+
+/// @brief Task that reads MAVlink messages from serial port
+/// @param parameter 
+void SerialChannelReaderTask(void* parameter) {
+
+    // MAVlink supports up to 4 logical channels, each of which can be bound to a different serial port,
+    // with the default channel being 0.
+    mavlink_channel_t channel = MAVLINK_COMM_0;
+    assert(channel >= 0 && channel <= 3); // Ensure channel is valid
+    assert(!(systemData.mavlink_channel_flags & (1 << channel))); // Ensure channel is not already in use
+    
+    uint32_t timeout_update_time = 0; //Used to determine if MAVlink messages are being received
+    uint32_t task_delay_time = 25; //Delay time between task executions in milliseconds
+
+    while (true) {
+        if (ProcessStreamChannel(Serial, channel)) {
+            timeout_update_time = millis();
+        }
+        
+        if (millis() - timeout_update_time >= 10000) {
+            timeout_update_time = millis();
+            task_delay_time = 250; //Decrease task priority as no messages are being received
+            Serial.printf("Waiting for MAVlink messages on channel %d\n", channel);
+        }
+        vTaskDelay(pdMS_TO_TICKS(task_delay_time));
     }
 }
 
-void ChannelReaderTask(void* parameter) {
+void LoraReceiverTask(void* parameter) {
 
+    xTaskNotify(displayScreenHandle, (uint32_t)LoraStatus::Idle, eSetValueWithOverwrite);
+    Serial.println("Starting LoRa succeeded!");
+
+    mavlink_channel_t channel = MAVLINK_COMM_2;
     while (true) {
-        ProcessStreamChannel(Serial, MAVLINK_COMM_0);
-
-        static uint32_t update_time = 0;
-        if (millis() - update_time >= 10000) {
-            update_time = millis();
-            Serial.printf("Waiting for MAVlink messages on channel %d\n", MAVLINK_COMM_0);
+        int packet_size = LoRa.parsePacket();
+        if (packet_size) {
+            xTaskNotify(displayScreenHandle, (uint32_t)LoraStatus::Receiving, eSetValueWithOverwrite);
+            while (LoRa.available()) {
+                ProcessStreamChannel(LoRa, channel);
+            }
         }
-        vTaskDelay(25);
-    }
+        else {
+            xTaskNotify(displayScreenHandle, (uint32_t)LoraStatus::Idle, eSetValueWithOverwrite);
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }   
 }
 
 /// @brief Task that controls the the 128x64 OLED display via I2C communication.
@@ -306,15 +358,15 @@ void DisplayScreenTask(void* parameter) {
     screen.init();
     screen.flipScreenVertically(); // Flip screen for debugging
     screen.clear();
-    screen.setFont(ArialMT_Plain_10);
+    screen.setFont(ArialMT_Plain_10);   
     screen.setTextAlignment(TEXT_ALIGN_CENTER);
     screen.drawString(screen.getWidth() / 2, screen.getHeight() / 2, "Lora Receiver");
     screen.display();
-    delay(2000);
-
+    
     while (true) {
-        vTaskDelay(1000);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
+
 }
 
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
@@ -333,19 +385,19 @@ void HighWaterMeasurerTask(void* parameter) {
     }
 }
 
-
-
 void setup() {
 
     Serial.begin(115200);
+    mavlinkQueue = xQueueCreate(10, sizeof(mavlink_message_t));
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, &displayScreenHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
-    //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
-    xTaskCreate(ChannelReaderTask, "companionReader", 4096, NULL, 1, NULL);
+    xTaskCreate(SerialChannelReaderTask, "companionReader", 4096, NULL, 1, NULL);
+    xTaskCreate(LoraReceiverTask, "loraReceiver", 4096, NULL, 1, &loraReceiverHandle);
     xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
+
 void loop() {
 
 }
