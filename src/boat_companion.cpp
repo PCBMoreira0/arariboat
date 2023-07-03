@@ -13,6 +13,13 @@
 #include <SPI.h> // Required for the ADS1115 ADC.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
 
+#define DEBUG // Uncomment to enable debug messages.
+#ifdef DEBUG
+#define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
+#else
+#define DEBUG_PRINTF(message, ...)
+#endif
+
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
@@ -35,10 +42,10 @@ enum BlinkRate : uint32_t {
     Slow = 1000,
     Medium = 500,
     Fast = 100,
-    Pulse = 100
+    Pulse = 1000 // Pulse is a special value that will make the LED blink fast and then return to the previous blink rate.
 };
 
-enum GPSPrintOptions {
+enum GPSPrintOptions : uint32_t {
     Off = '0',
     Raw,
     Parsed
@@ -48,35 +55,29 @@ enum GPSPrintOptions {
 void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
 
-    constexpr int ledPin = 2;
+    constexpr int ledPin = 2; // Built-in LED pin for the ESP32 DevKit board.
     pinMode(ledPin, OUTPUT);
     uint32_t blinkRate = 1000;
     uint32_t previousBlinkRate = blinkRate;
+
+    auto FastBlinkPulse = [](int pin) {
+        for (int i = 0; i < 4; i++) {
+            digitalWrite(pin, HIGH); vTaskDelay(pdMS_TO_TICKS(50));
+            digitalWrite(pin, LOW);  vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    };
     
     while (true) {
-        digitalWrite(ledPin, HIGH);
-        vTaskDelay(pdMS_TO_TICKS(blinkRate));
-        digitalWrite(ledPin, LOW);
-        vTaskDelay(pdMS_TO_TICKS(blinkRate));
+        digitalWrite(ledPin, HIGH); vTaskDelay(pdMS_TO_TICKS(blinkRate));
+        digitalWrite(ledPin, LOW);  vTaskDelay(pdMS_TO_TICKS(blinkRate));
         
         // Set blink rate to the value received from the notification
-        if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0) == pdTRUE) {
-            Serial.printf("Received notification to change blink rate to %d\n", blinkRate);
+        if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0)) {
             if (blinkRate == BlinkRate::Pulse) {
                 FastBlinkPulse(ledPin);
                 blinkRate = previousBlinkRate;
             }
         }
-    }
-}
-
-void FastBlinkPulse(int pin) {
-    // 10 pulses
-    for (int i = 0; i < 10; i++) {
-        digitalWrite(pin, HIGH);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        digitalWrite(pin, LOW);
-        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -95,19 +96,19 @@ void WifiConnectionTask(void* parameter) {
             xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
             for (auto& wifi : wifiCredentials) {
                 WiFi.begin(wifi.first, wifi.second);
-                Serial.printf("Trying to connect to %s\n", wifi.first);
+                Serial.printf("\n[WIFI]Trying to connect to %s\n", wifi.first);
                 int i = 0;
                 while (WiFi.status() != WL_CONNECTED) {
                     vTaskDelay(pdMS_TO_TICKS(500));
                     Serial.print(".");
                     i++;
                     if (i > 5) {
-                        Serial.printf("Failed to connect to %s\n", wifi.first);
+                        Serial.printf("\n[WIFI]Failed to connect to %s\n", wifi.first);
                         break;
                     }
                 }
                 if (WiFi.status() == WL_CONNECTED) {
-                    Serial.println("Connected to WiFi");
+                    Serial.println("\n[WIFI]Connected to WiFi");
                     xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
                     xTaskNotifyGive(serverTaskHandle);
                     break;
@@ -346,17 +347,38 @@ void TemperatureReaderTask(void* parameter) {
         sensors.requestTemperatures(); // Send the command to update temperature readings
         float temperature_motor = sensors.getTempC(thermal_probe_zero);
         float temperature_mppt = sensors.getTempC(thermal_probe_one);
-        Serial.printf("[Temperature][%x]Motor: %f\n", thermal_probe_zero[7], temperature_motor); // [Temperature][last byte of probe address] = value is the format
-        Serial.printf("[Temperature][%x]MPPT: %f\n", thermal_probe_one[7], temperature_mppt);
-        
+
+        #ifdef DEBUG_PRINTF
+        if (temperature_motor == DEVICE_DISCONNECTED_C) {
+            DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[7]);
+        } else {
+            DEBUG_PRINTF("[Temperature][%x]Motor: %f\n", thermal_probe_zero[7], temperature_motor); // [Temperature][last byte of probe address] = value is the format
+        }
+
+        if (temperature_mppt == DEVICE_DISCONNECTED_C) {
+            DEBUG_PRINTF("[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[7]);
+        } else {
+            DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[7], temperature_mppt);
+        }
+        #endif
+
         // Prepare and send a mavlink message
         mavlink_message_t message;
-        mavlink_msg_temperatures_pack(1, 200, &message, temperature_motor, temperature_mppt);
+        mavlink_temperatures_t temperatures = {
+            .temperature_motor = temperature_motor,
+            .temperature_mppt = temperature_mppt
+        };
+        mavlink_msg_temperatures_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &temperatures);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
 
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000))) { // Wait for notification from serial reader task to scan for new probes
+        Wire.beginTransmission(0x04);
+        Wire.write(buffer, len);
+        Wire.endTransmission();
+
+        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify the LED blinker task to blink the LED
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(8000))) { // Wait for notification from serial reader task to scan for new probes
             DallasDeviceScanIndex(sensors); 
         }
     }
@@ -398,85 +420,70 @@ void GpsReaderTask(void* parameter) {
     // Example of longitude: -73.989308 (west is negative)
     // The fifth decimal place is worth up to 1.1 m. The sixth decimal place is worth up to 11cm. And so forth.
     
+    // Three hardware serial ports are available on the ESP32 with configurable GPIOs.
+    // Serial0 is used for debugging and is connected to the USB-to-serial converter. Therefore, Serial1 and Serial2 are available.
+    
+    TinyGPSPlus gps; // Object that parses NMEA sentences from the NEO-6M GPS module
     constexpr uint8_t gps_rx_pin = 16;  
     constexpr uint8_t gps_tx_pin = 17; 
     constexpr int32_t baud_rate = 9600; // Fixed baud rate used by NEO-6M GPS module
-    
-    TinyGPSPlus gps;
-    uint32_t gps_mode = GPSPrintOptions::Parsed;
-
-    // Three hardware serial ports are available on the ESP32 with configurable GPIOs.
-    // Serial0 is used for debugging and is connected to the USB-to-serial converter. Therefore, Serial1 and Serial2 are available.
     Serial2.begin(baud_rate, SERIAL_8N1, gps_rx_pin, gps_tx_pin); // Initialize Serial2 with the chosen baud rate and pins
+   
     while (true) {
         while (Serial2.available()) {
-            switch (gps_mode) {
-                
-                case GPSPrintOptions::Off:
-                    Serial2.read();
-                    break;
+            // Reads the serial stream from the NEO-6M GPS module and parses it into TinyGPSPlus object if a valid NMEA sentence is received
+            if (gps.encode(Serial2.read())) { 
+                constexpr float invalid_value = -1.0f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
+                float latitude = invalid_value;
+                float longitude = invalid_value;
+                float speed = invalid_value;
+                float course = invalid_value;
+                uint8_t satellites = 0;
 
-                case GPSPrintOptions::Raw:
-                    Serial.print((char)Serial2.read());
-                    break;
+                if (gps.location.isValid()) {
+                    latitude = gps.location.lat();
+                    longitude = gps.location.lng();
+                    //DEBUG_PRINTF("[GPS]Latitude: %f, Longitude: %f\n", latitude, longitude);
+                }
+                if (gps.speed.isValid()) {
+                    speed = gps.speed.kmph();
+                    //DEBUG_PRINTF("[GPS]Speed: %f\n", speed);
+                }
+                if (gps.course.isValid()) {
+                    course = gps.course.deg();
+                    //DEBUG_PRINTF("[GPS]Course: %f\n", course);
+                }
+                if (gps.satellites.isValid()) {
+                    satellites = gps.satellites.value();
+                    if (!satellites) break; // If no satellites are visible, the gps data is invalid. Break from the function.
+                    //DEBUG_PRINTF("[GPS]Satellites: %d\n", satellites);
+                }
 
-                case GPSPrintOptions::Parsed:
-                    if (gps.encode(Serial2.read())) { // Reads the serial stream from the NEO-6M GPS module and parses it into TinyGPSPlus object if a valid NMEA sentence is received
+                // Prepare and send mavlink message by encoding the payload into a struct, then encoding the struct into a mavlink message below.
+                mavlink_message_t message;
+                mavlink_gps_info_t gps_info = {
+                    latitude,
+                    longitude,
+                    speed,
+                    course,
+                    satellites
+                };
+                    
+                mavlink_msg_gps_info_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &gps_info);
+                uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+                uint16_t length = mavlink_msg_to_send_buffer(buffer, &message);
+                Serial.write(buffer, length);
 
-                        constexpr float invalid_value = -1.0f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
-                        float latitude = invalid_value;
-                        float longitude = invalid_value;
-                        float speed = invalid_value;
-                        float course = invalid_value;
-                        uint8_t satellites = 0;
-
-                        if (gps.location.isValid()) {
-                            latitude = gps.location.lat();
-                            longitude = gps.location.lng();
-                            //Serial.printf("[GPS]Latitude: %f, Longitude: %f\n", latitude, longitude);
-                        }
-                        if (gps.speed.isValid()) {
-                            speed = gps.speed.kmph();
-                            //Serial.printf("[GPS]Speed: %f\n", speed);
-                        }
-                        if (gps.course.isValid()) {
-                            course = gps.course.deg();
-                            //Serial.printf("[GPS]Course: %f\n", course);
-                        }
-                        if (gps.satellites.isValid()) {
-                            satellites = gps.satellites.value();
-                            //Serial.printf("[GPS]Satellites: %d\n", satellites);
-                        }
-
-                        if (!satellites) break; // If no satellites are visible, the gps data is invalid. Break from the function.
-
-                        // Prepare and send mavlink message by encoding the payload into a struct, then encoding the struct into a mavlink message below.
-                        
-                        mavlink_gps_info_t gps_info = {
-                            latitude,
-                            longitude,
-                            speed,
-                            course,
-                            satellites
-                        };
-                        
-                        mavlink_message_t message;
-                        mavlink_msg_gps_info_encode(1, 200, &message, &gps_info);
-                        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-                        uint16_t length = mavlink_msg_to_send_buffer(buffer, &message);
-                        Serial.write(buffer, length);
-                    }
-                    break;
-
-                default:
-                    Serial.printf("Unknown GPS mode: %d\n", gps_mode);
-                    gps_mode = GPSPrintOptions::Parsed;
-                    break;
-            }           
-        }
-        xTaskNotifyWait(0, 0, &gps_mode, 3000);
+                Wire.beginTransmission(0x04);
+                Wire.write(buffer, length);
+                Wire.endTransmission();
+                xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); 
+            }
+        }           
+        vTaskDelay(pdMS_TO_TICKS(6000));
     }
 }
+
 
 float CalculateVoltagePrimaryResistor(const float pin_voltage, const float sensor_output_ratio, const int32_t primary_resistance, const int32_t burden_resistance);
 float CalculateInputVoltage(const float voltage_primary_resistor_drop, const float primary_voltage_divider_ratio);
@@ -528,28 +535,30 @@ void InstrumentationReaderTask(void* parameter) {
     
     while (true) {
         // Check and confirm which values of resistors are being used on the board.
+        // Values associated with the voltage sensor.
         constexpr float voltage_conversion_ratio = 2.59081f; // Datasheet gives a reference value of 2.50, but here it is being used an iterative process to find a value that satisfies the conversion measurements.
         constexpr int32_t voltage_primary_resistance = 4700; // Resistor connected to primary side of LV-20P voltage sensor.
         constexpr int32_t voltage_primary_coil_resistance = 250; // Resistance of the primary coil of the LV-20P voltage sensor.
         constexpr float primary_voltage_divider_ratio  = (float)voltage_primary_coil_resistance / voltage_primary_resistance;
         constexpr int32_t voltage_burden_resistance = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
 
+        // Values associated with current sensors.
         constexpr int32_t selected_full_scale_range = 100; // Selected full scale range of the T201 current sensor.
-        constexpr float current_conversion_ratio = 0.001f;
+        constexpr float current_conversion_ratio = 0.001f; // Output Conversion ratio of the LA55-P current sensor.
         constexpr int32_t motor_burden_resistance = 22;
-        constexpr int32_t mppt_burden_resistance = 22;
-        constexpr int32_t aux_burden_resistance = 10; 
+        constexpr int32_t battery_burden_resistance = 22;
+        constexpr int32_t mppt_burden_resistance = 10; 
 
         // In the ADS1115 single ended measurements have 15 bits of resolution. Only differential measurements have 16 bits of resolution.
         // As we are using the 4 analog inputs for each of the 4 sensors, single ended measurements are being used in order to access all 4 sensors.
         // When using single ended mode, the maximum output code is 0x7FFF(32767), which corresponds to the full-scale input voltage.
+
         float voltage_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
         float current_motor_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
-        float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
-        float current_aux_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
-        Serial.printf("\n[Instrumentation-PIN-VOLTAGE]Battery pin voltage: %f, Motor pin voltage: %f, MPPT pin voltage: %f, Aux pin voltage: %f\n", voltage_battery_pin_voltage, current_motor_pin_voltage, current_mppt_pin_voltage, current_aux_pin_voltage);
+        float current_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
+        float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
+        //DEBUG_PRINTF("\n[Instrumentation-PIN-VOLTAGE]Battery voltage: %f, Motor voltage: %f, Battery voltage: %f, MPPT voltage: %f\n", voltage_battery_pin_voltage, current_motor_pin_voltage, current_battery_pin_voltage, current_mppt_pin_voltage);
 
-        
         // Calibrate the voltage by comparing the value of voltage_primary_resistor_drop variable against the actual voltage drop on the primary resistor using a multimeter. 
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
         float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(voltage_battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
@@ -557,13 +566,26 @@ void InstrumentationReaderTask(void* parameter) {
         float calibrated_voltage_battery = LinearCorrection(voltage_battery, 1.0025059f, 0.0f);
         
         float current_motor = CalculateCurrentT201(current_motor_pin_voltage, selected_full_scale_range, motor_burden_resistance);
-        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance);
-        float current_aux = CalculateCurrentLA55(current_aux_pin_voltage, current_conversion_ratio, aux_burden_resistance);
-        Serial.printf("[Instrumentation-MEASUREMENTS]Resistor: %f Battery: %f Calibrated battery: %f, Motor current: %f, MPPT current: %f, Aux current: %f\n", voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_mppt, current_aux);
+        float current_battery = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
+        float current_mppt = CalculateCurrentLA55(current_mppt_pin_voltage, current_conversion_ratio, mppt_burden_resistance);
+        DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
+                        "[Instrumentation]Battery: %fV\n"
+                        "[Instrumentation]Calibrated battery: %fV\n"
+                        "[Instrumentation]Motor current: %fV\n"
+                        "[Instrumentation]Battery current: %fV\n"
+                        "[Instrumentation]MPPT current: %fV\n",
+        voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
 
         // Prepare and send Mavlink message
         mavlink_message_t message;
-        mavlink_msg_instrumentation_pack(1, 200, &message, current_motor, current_mppt, current_aux, calibrated_voltage_battery);
+        mavlink_instrumentation_t instrumentation = {
+            .current_zero = current_motor,
+            .current_one = current_battery,
+            .current_two = current_mppt,
+            .voltage_battery = calibrated_voltage_battery
+        };
+        
+        mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_1, &message, &instrumentation);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
@@ -571,7 +593,8 @@ void InstrumentationReaderTask(void* parameter) {
         Wire.beginTransmission(0x04);
         Wire.write(buffer, len);
         Wire.endTransmission();
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
+        vTaskDelay(pdMS_TO_TICKS(3500));
     }
 }
 
@@ -638,15 +661,13 @@ float LinearCorrection(const float input_value, const float slope, const float i
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
 /// @param parameter Unused. Just here to comply with the task function signature.
-void HighWaterMeasurerTask(void* parameter) {
+void StackHighWaterMeasurerTask(void* parameter) {
     while (true) {
         Serial.printf("\n");
         for (int i = 0; i < taskHandlesSize; i++) {
-            Serial.printf("Task %s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
+            Serial.printf("[Task]%s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
         }
-        // free heap
-        Serial.printf("Free heap: %d\n", esp_get_free_heap_size());
-        Serial.printf("\n");
+        Serial.printf("[Task]System free heap: %d\n", esp_get_free_heap_size());
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
@@ -663,7 +684,7 @@ void setup() {
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTaskHandle);
-    xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
+    xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
 void loop() {
