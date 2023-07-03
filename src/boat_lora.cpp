@@ -11,6 +11,13 @@
 #include <LoRa.h> // SandeepMistry physical layer library
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
 
+#define DEBUG // Uncomment to enable debug messages.
+#ifdef DEBUG
+#define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
+#else
+#define DEBUG_PRINTF(message, ...)
+#endif
+
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
@@ -28,67 +35,69 @@ constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); /
 
 class SystemData {
 public:
-     float voltage_battery;
-     float current_motor;
-     float current_battery;
-     float current_mppt;
-     float aux_voltage_battery;
-     float latitude;
-     float longitude;
-     bool is_pump_port_on;
-     bool is_pump_starboard_on;
+    float voltage_battery;
+    float current_motor;
+    float current_battery;
+    float current_mppt;
+    float aux_voltage_battery;
+    float latitude;
+    float longitude;
+    float temperature_motor;
+    float temperature_mppt;
+    bool is_pump_port_on;
+    bool is_pump_starboard_on;
 };
 
-SystemData systemData = { 48.0f, 0.0f, 0.0f, 0.0f, 0.0f, -22.909378f, -43.117346f, false, false };
+SystemData systemData = {
+    .voltage_battery = 48.0f,
+    .current_motor = 0.0f,
+    .current_battery = 0.0f,
+    .current_mppt = 0.0f,
+    .aux_voltage_battery = 0.0f,
+    .latitude = -22.909378f,
+    .longitude = -43.117346f,
+    .temperature_motor = 25.0f,
+    .temperature_mppt = 25.0f,
+    .is_pump_port_on = false,
+    .is_pump_starboard_on = false
+};
 
 enum BlinkRate : uint32_t {
     Slow = 1000,
     Medium = 500,
     Fast = 100,
-    Pulse = 100
+    Pulse = 1000 // Pulse is a special value that will make the LED blink fast and then return to the previous blink rate.
 };
-
-#define DEBUG // Uncomment to enable debug messages.
-#ifdef DEBUG
-#define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
-#else
-#define DEBUG_PRINTF(message, ...)
-#endif
 
 // Tasks can send notifications here to change the blink rate of the LED in order to communicate the status of the boat.
 void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
 
-    constexpr int ledPin = 25;
+    constexpr int ledPin = 25; // Pin 25 is the onboard LED on the TTGO LoRa V2.1.6 board.
     pinMode(ledPin, OUTPUT);
 
     uint32_t blinkRate = BlinkRate::Slow;
     uint32_t previousBlinkRate = blinkRate;
+
+    // Lambda function to blink the LED fast 4 times and then return to the previous blink rate.
+    auto FastBlinkPulse = [](int pin) {
+        for (int i = 0; i < 4; i++) {
+            digitalWrite(pin, HIGH); vTaskDelay(pdMS_TO_TICKS(50));
+            digitalWrite(pin, LOW);  vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    };
     
     while (true) {
-        digitalWrite(ledPin, HIGH);
-        vTaskDelay(pdMS_TO_TICKS(blinkRate));
-        digitalWrite(ledPin, LOW);
-        vTaskDelay(pdMS_TO_TICKS(blinkRate));
+        digitalWrite(ledPin, HIGH); vTaskDelay(pdMS_TO_TICKS(blinkRate));
+        digitalWrite(ledPin, LOW);  vTaskDelay(pdMS_TO_TICKS(blinkRate));
         
         // Set blink rate to the value received from the notification
         if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0) == pdTRUE) {
-            Serial.printf("Received notification to change blink rate to %d\n", blinkRate);
             if (blinkRate == BlinkRate::Pulse) {
                 FastBlinkPulse(ledPin);
                 blinkRate = previousBlinkRate;
             }
         }
-    }
-}
-
-void FastBlinkPulse(int pin) {
-
-    for (int i = 0; i < 10; i++) {
-        digitalWrite(pin, HIGH);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        digitalWrite(pin, LOW);
-        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -107,19 +116,19 @@ void WifiConnectionTask(void* parameter) {
             xTaskNotify(ledBlinkerHandle, BlinkRate::Fast, eSetValueWithOverwrite);
             for (auto& wifi : wifiCredentials) {
                 WiFi.begin(wifi.first, wifi.second);
-                Serial.printf("Trying to connect to %s\n", wifi.first);
+                Serial.printf("\nTrying to connect to %s\n", wifi.first);
                 int i = 0;
                 while (WiFi.status() != WL_CONNECTED) {
                     vTaskDelay(pdMS_TO_TICKS(500));
                     Serial.print(".");
                     i++;
                     if (i > 5) {
-                        Serial.printf("Failed to connect to %s\n", wifi.first);
+                        Serial.printf("\nFailed to connect to %s\n", wifi.first);
                         break;
                     }
                 }
                 if (WiFi.status() == WL_CONNECTED) {
-                    Serial.printf("Connected to %s\nIP: %s\n", wifi.first, WiFi.localIP().toString().c_str());
+                    Serial.printf("\nConnected to %s\nIP: %s\n", wifi.first, WiFi.localIP().toString().c_str());
                     xTaskNotify(ledBlinkerHandle, BlinkRate::Slow, eSetValueWithOverwrite);
                     xTaskNotifyGive(serverTaskHandle);
                     break;
@@ -339,7 +348,7 @@ void CockpitDisplayTask(void* parameter) {
     }
 }
 
-void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
+bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
 
     mavlink_message_t message;
     mavlink_status_t status;
@@ -350,11 +359,11 @@ void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
             Serial.print('\n');
             switch (message.msgid) {
                 case MAVLINK_MSG_ID_HEARTBEAT: {    
-                    DEBUG_PRINTF("Received heartbeat from channel %d\n", channel);
+                    DEBUG_PRINTF("[RX]Received heartbeat from channel %d\n", channel);
                     break;
                 }
                 case MAVLINK_MSG_ID_INSTRUMENTATION: {
-                    Serial.printf("Received instrumentation from channel %d\n", channel);
+                    Serial.printf("[RX]Received instrumentation from channel %d\n", channel);
                     mavlink_instrumentation_t instrumentation;
                     mavlink_msg_instrumentation_decode(&message, &instrumentation);
 
@@ -363,38 +372,80 @@ void ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     systemData.current_battery = instrumentation.current_one;
                     systemData.current_mppt    = instrumentation.current_two;
 
-                    DEBUG_PRINTF("Battery voltage: %f\n", systemData.voltage_battery);
-                    DEBUG_PRINTF("Motor current: %f\n", systemData.current_motor);
-                    DEBUG_PRINTF("Battery current: %f\n", systemData.current_battery);
-                    DEBUG_PRINTF("MPPT current: %f\n", systemData.current_mppt);
+                    DEBUG_PRINTF("[RX]Battery voltage: %f\n", systemData.voltage_battery);
+                    DEBUG_PRINTF("[RX]Motor current: %f\n", systemData.current_motor);
+                    DEBUG_PRINTF("[RX]Battery current: %f\n", systemData.current_battery);
+                    DEBUG_PRINTF("[RX]MPPT current: %f\n", systemData.current_mppt);
+                    break;
+                }
+                case MAVLINK_MSG_ID_TEMPERATURES: {
+                    Serial.printf("[RX]Received temperatures from channel %d\n", channel);
+                    mavlink_temperatures_t temperatures;
+                    mavlink_msg_temperatures_decode(&message, &temperatures);
+
+                    systemData.temperature_motor = temperatures.temperature_motor;
+                    systemData.temperature_mppt = temperatures.temperature_mppt;
+
+                   #ifdef DEBUG_PRINTF
+                   #define DEVICE_DISCONNECTED_C -127.0f
+                    if (systemData.temperature_motor == DEVICE_DISCONNECTED_C) {
+                        DEBUG_PRINTF("\n[Temperature]Motor: Probe disconnected\n", NULL);
+                    } else {
+                        DEBUG_PRINTF("[Temperature]Motor: %f\n", systemData.temperature_motor); // [Temperature][last byte of probe address] = value is the format
+                    }
+
+                    if (systemData.temperature_mppt == DEVICE_DISCONNECTED_C) {
+                        DEBUG_PRINTF("[Temperature]MPPT: Probe disconnected\n", NULL);
+                    } else {
+                        DEBUG_PRINTF("[Temperature]MPPT: %f\n", systemData.temperature_mppt);
+                    }
+                    #endif
+
+                    break;
+                }
+                case MAVLINK_MSG_ID_GPS_INFO: {
+                    Serial.printf("[RX]Received GPS info from channel %d\n", channel);
+                    mavlink_gps_info_t gps_info;
+                    mavlink_msg_gps_info_decode(&message, &gps_info);
+
+                    systemData.latitude = gps_info.latitude;
+                    systemData.longitude = gps_info.longitude;
+
+                    DEBUG_PRINTF("[RX]GPS latitude: %f\n", systemData.latitude);
+                    DEBUG_PRINTF("[RX]GPS longitude: %f\n", systemData.longitude);
                     break;
                 }
                 default: {
-                    Serial.printf("Received message with ID #%d from channel %d\n", message.msgid, channel);
+                    Serial.printf("[RX]Received message with ID #%d from channel %d\n", message.msgid, channel);
                     break;
                 }
             }
-            // Route received message to serial port
             
+            // Route received message to serial port
             uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
             uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
             Serial.write(buffer, len);
             LoRa.beginPacket();
             LoRa.write(buffer, len);
             LoRa.endPacket();
+            return true;
         }
     }
+    return false;
 }
 
 void ChannelReaderTask(void* parameter) {
 
     while (true) {
-        ProcessStreamChannel(Serial, MAVLINK_COMM_0);
+        static uint32_t last_reception_time = 0;
+        if (millis() - last_reception_time >= 10000) {
+            last_reception_time = millis();
+            Serial.printf("\n[CHANNEL]Waiting for Mavlink on channel %d\n", MAVLINK_COMM_0);
+        }
 
-        static uint32_t update_time = 0;
-        if (millis() - update_time >= 10000) {
-            update_time = millis();
-            Serial.printf("Waiting for MAVlink...\n");
+        if (ProcessStreamChannel(Serial, MAVLINK_COMM_0)) {
+            xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
+            last_reception_time = millis();
         }
         vTaskDelay(25);
     }
@@ -446,15 +497,14 @@ void ReceiveI2CMessage(int number_bytes) {
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
 /// @param parameter Unused. Just here to comply with the task function signature.
-void HighWaterMeasurerTask(void* parameter) {
+void StackHighWaterMeasurerTask(void* parameter) {
 
     while (true) {
         Serial.printf("\n");
         for (int i = 0; i < taskHandlesSize; i++) {
-            Serial.printf("Task %s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
+            Serial.printf("[Task] %s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
         }
-        Serial.printf("Free heap: %d\n", esp_get_free_heap_size());
-        Serial.printf("\n");
+        Serial.printf("[Task]System free heap: %d\n", esp_get_free_heap_size());
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
@@ -479,10 +529,14 @@ void setup() {
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
     xTaskCreate(ChannelReaderTask, "companionReader", 4096, NULL, 1, NULL);
-    xTaskCreate(HighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
+    xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
     Wire.begin(0x04);
     Wire.setBufferSize(MAVLINK_MAX_PACKET_LEN);
-    Wire.onReceive([](int number_bytes) { ProcessStreamChannel(Wire, MAVLINK_COMM_1);});
+    Wire.onReceive([](int number_bytes) { 
+                        if (ProcessStreamChannel(Wire, MAVLINK_COMM_1)) {
+                            xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
+                        }
+                    });
 }
 void loop() {
 
