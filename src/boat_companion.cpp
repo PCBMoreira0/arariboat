@@ -12,6 +12,7 @@
 #include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain amplifier Analog-Digital Converter for measuring current and voltage.
 #include <SPI.h> // Required for the ADS1115 ADC.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
+#include <Encoder.h> // Rotary encoder library.
 
 #define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
@@ -658,6 +659,38 @@ float LinearCorrection(const float input_value, const float slope, const float i
     return slope * input_value + intercept;
 }
 
+void EncoderControl(void* parameter) {
+    
+    constexpr uint8_t dac_pin = 25;
+    constexpr uint8_t power_pin = 27;
+    constexpr uint8_t dataPin = 14;
+    constexpr uint8_t clockPin = 12;
+
+    Encoder encoder(clockPin, dataPin);
+    pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH);
+ 
+    static int32_t previousPosition = 0;
+    constexpr uint8_t dac_resolution = 255; // 8-bit DAC
+    constexpr uint8_t max_number_steps = 50;
+    constexpr int16_t max_output_voltage = 3300; // mV
+    static uint32_t print_timer = 0;
+  
+    while (true) {
+        int32_t currentPosition = encoder.read();
+        currentPosition = constrain(currentPosition, 0, max_number_steps);
+        if (currentPosition != previousPosition) {
+            previousPosition = currentPosition;
+            dacWrite(dac_pin, currentPosition * dac_resolution / max_number_steps);
+        }
+        if (millis() - print_timer > 4000) {
+            print_timer = millis();
+            Serial.printf("\n[DAC]Encoder position: %d%%\n", currentPosition * 100 / max_number_steps);
+            Serial.printf("[DAC] output: %d mV\n", currentPosition * max_output_voltage / max_number_steps);
+        }
+        vTaskDelay(5);
+    }
+}
+
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
 /// @param parameter Unused. Just here to comply with the task function signature.
@@ -684,6 +717,7 @@ void setup() {
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTaskHandle);
+    xTaskCreate(EncoderControl, "encoderControl", 4096, NULL, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
