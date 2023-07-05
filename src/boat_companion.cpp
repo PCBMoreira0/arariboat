@@ -374,9 +374,11 @@ void TemperatureReaderTask(void* parameter) {
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
 
+        #ifdef TRANSMIT_VIA_I2C
         Wire.beginTransmission(0x04);
         Wire.write(buffer, len);
         Wire.endTransmission();
+        #endif
 
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify the LED blinker task to blink the LED
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(8000))) { // Wait for notification from serial reader task to scan for new probes
@@ -475,9 +477,11 @@ void GpsReaderTask(void* parameter) {
                 uint16_t length = mavlink_msg_to_send_buffer(buffer, &message);
                 Serial.write(buffer, length);
 
+                #ifdef TRANSMIT_VIA_I2C
                 Wire.beginTransmission(0x04);
-                Wire.write(buffer, length);
+                Wire.write(buffer, len);
                 Wire.endTransmission();
+                #endif
                 xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); 
             }
         }           
@@ -591,9 +595,11 @@ void InstrumentationReaderTask(void* parameter) {
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
 
+        #ifdef TRANSMIT_VIA_I2C
         Wire.beginTransmission(0x04);
         Wire.write(buffer, len);
         Wire.endTransmission();
+        #endif
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
         vTaskDelay(pdMS_TO_TICKS(3500));
     }
@@ -674,6 +680,7 @@ void EncoderControl(void* parameter) {
     constexpr uint8_t max_number_steps = 50;
     constexpr int16_t max_output_voltage = 3300; // mV
     static uint32_t print_timer = 0;
+    encoder.readAndReset(); // Reset encoder position to zero.
   
     while (true) {
         int32_t currentPosition = encoder.read();
@@ -688,6 +695,53 @@ void EncoderControl(void* parameter) {
             Serial.printf("[DAC] output: %d mV\n", currentPosition * max_output_voltage / max_number_steps);
         }
         vTaskDelay(5);
+    }
+}
+
+/// @brief Auxiliary task that reads the battery voltage and state of pumps.
+/// @param parameter 
+void AuxiliaryReaderTask(void* parameter) {
+    
+    // Read lead-acid battery and pumps voltage through 4k7-1k voltage divider.
+    constexpr uint8_t port_pump_pin = 36;
+    constexpr uint8_t starboard_pump_pin = 39;
+    constexpr uint8_t battery_voltage_pin = 34; 
+    constexpr float battery_voltage_divider_ratio = 1.0f / (4.7f + 1.0f); // Voltage divider ratio used to measure battery voltage.
+    constexpr float adc_reference_voltage = 3.3f;
+    constexpr uint16_t adc_resolution = 4095; // 12-bit ADC
+    constexpr float battery_max_voltage = 13.8f;
+    constexpr float battery_min_voltage = 11.8f;
+    constexpr float battery_max_voltage_divided = battery_max_voltage * battery_voltage_divider_ratio; 
+    constexpr float battery_min_voltage_divided = battery_min_voltage * battery_voltage_divider_ratio; 
+    constexpr uint16_t number_samples_filter = 9;
+    constexpr float pump_threshold_voltage = 10.0f; // Voltage at which the pump is considered to be on.
+
+    pinMode(battery_voltage_pin, INPUT);
+    pinMode(port_pump_pin, INPUT);
+    pinMode(starboard_pump_pin, INPUT);
+
+    float battery_voltage = 0.0f;
+    bool port_pump_voltage = 0.0f;
+    bool starboard_pump_voltage = 0.0f;
+
+    while (true) {
+        float battery_voltage_reading = (analogRead(battery_voltage_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
+        battery_voltage = battery_voltage * number_samples_filter / (number_samples_filter + 1);
+
+        float port_pump_voltage_reading = (analogRead(port_pump_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
+        port_pump_voltage = port_pump_voltage * number_samples_filter / (number_samples_filter + 1);
+
+        float starboard_pump_voltage_reading = (analogRead(starboard_pump_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
+        starboard_pump_voltage = starboard_pump_voltage * number_samples_filter / (number_samples_filter + 1);
+
+        bool is_port_pump_on = port_pump_voltage_reading > pump_threshold_voltage;
+        bool is_starboard_pump_on = starboard_pump_voltage_reading > pump_threshold_voltage;
+
+        Serial.printf("\n[AUX]Battery voltage: %.2f V\n", battery_voltage_reading);
+        Serial.printf("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
+        Serial.printf("[AUX]Starboard pump: %s\n", is_starboard_pump_on ? "ON" : "OFF");
+
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
@@ -717,12 +771,13 @@ void setup() {
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTaskHandle);
+    xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, NULL);
     xTaskCreate(EncoderControl, "encoderControl", 4096, NULL, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
 void loop() {
-
+    
 }
 
 
