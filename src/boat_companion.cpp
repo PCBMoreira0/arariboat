@@ -21,6 +21,32 @@
 #define DEBUG_PRINTF(message, ...)
 #endif
 
+// Singleton class for storing system-data that needs to be accessed by multiple tasks.
+class SystemData {
+
+public:
+    static SystemData& getInstance() {
+        static SystemData instance;
+        return instance;
+    }
+
+    mavlink_instrumentation_t instrumentation;
+    mavlink_gps_info_t gps;
+    mavlink_temperatures_t temperature;
+    mavlink_control_system_t controlSystem;
+    
+private:
+    SystemData() { // Private constructor to avoid multiple instances.
+        instrumentation = { 0 };
+        gps = { 0 };
+        temperature = { 0 };
+        controlSystem = { 0 };
+    }
+    SystemData(SystemData const&) = delete; // Delete copy constructor.
+    SystemData& operator=(SystemData const&) = delete; // Delete assignment operator.
+    SystemData(SystemData&&) = delete; // Delete move constructor.
+};
+
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
@@ -148,6 +174,16 @@ void ServerTask(void* parameter) {
         request->send(200, "text/html", "<h1>Boat32</h1><p>Resetting...</p>");
         vTaskDelay(pdMS_TO_TICKS(1000));
         ESP.restart();
+    });
+
+    server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Send system instrumentation data from singleton class
+        float current_motor = SystemData::getInstance().instrumentation.current_zero;
+        float current_battery = SystemData::getInstance().instrumentation.current_one;
+        float current_mppt = SystemData::getInstance().instrumentation.current_two;
+        float voltage_battery = SystemData::getInstance().instrumentation.voltage_battery;
+        request->send(200, "text/html", "<h1>Boat32</h1><p>Current motor: " + String(current_motor) + "</p><p>Current battery: " + String(current_battery) + "</p><p>Current MPPT: " + String(current_mppt) + "</p><p>Voltage battery: " + String(voltage_battery) + "</p>");
+
     });
     
 
@@ -590,6 +626,11 @@ void InstrumentationReaderTask(void* parameter) {
                         "[Instrumentation]Battery current: %fV\n"
                         "[Instrumentation]MPPT current: %fV\n",
         voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
+
+        SystemData::getInstance().instrumentation.voltage_battery = calibrated_voltage_battery;
+        SystemData::getInstance().instrumentation.current_zero = current_motor;
+        SystemData::getInstance().instrumentation.current_one = current_battery;
+        SystemData::getInstance().instrumentation.current_two = current_mppt;
 
         // Prepare and send Mavlink message
         mavlink_message_t message;
