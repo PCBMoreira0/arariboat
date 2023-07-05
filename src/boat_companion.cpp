@@ -56,8 +56,10 @@ enum GPSPrintOptions : uint32_t {
 void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
 
-    constexpr int ledPin = 2; // Built-in LED pin for the ESP32 DevKit board.
+    constexpr uint8_t ledPin = 2; // Built-in LED pin for the ESP32 DevKit board.
+    constexpr uint8_t buzzer_pin = 26;
     pinMode(ledPin, OUTPUT);
+    dacWrite(buzzer_pin, 0);
     uint32_t blinkRate = 1000;
     uint32_t previousBlinkRate = blinkRate;
 
@@ -71,6 +73,14 @@ void LedBlinkerTask(void* parameter) {
     while (true) {
         digitalWrite(ledPin, HIGH); vTaskDelay(pdMS_TO_TICKS(blinkRate));
         digitalWrite(ledPin, LOW);  vTaskDelay(pdMS_TO_TICKS(blinkRate));
+
+        if (blinkRate == BlinkRate::Fast) {
+            // 3 beats. Double beep, pause, double beep, pause, double beep, pause.
+            dacWrite(buzzer_pin, 255); vTaskDelay(pdMS_TO_TICKS(100));
+            dacWrite(buzzer_pin, 0); vTaskDelay(pdMS_TO_TICKS(100));
+            dacWrite(buzzer_pin, 255); vTaskDelay(pdMS_TO_TICKS(100));
+            dacWrite(buzzer_pin, 0); vTaskDelay(pdMS_TO_TICKS(200));
+        }
         
         // Set blink rate to the value received from the notification
         if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0)) {
