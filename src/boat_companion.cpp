@@ -183,9 +183,21 @@ void ServerTask(void* parameter) {
         float current_mppt = SystemData::getInstance().instrumentation.current_two;
         float voltage_battery = SystemData::getInstance().instrumentation.voltage_battery;
         request->send(200, "text/html", "<h1>Boat32</h1><p>Current motor: " + String(current_motor) + "</p><p>Current battery: " + String(current_battery) + "</p><p>Current MPPT: " + String(current_mppt) + "</p><p>Voltage battery: " + String(voltage_battery) + "</p>");
-
     });
     
+    server.on("/gps", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Send GPS data from singleton class
+        float latitude = SystemData::getInstance().gps.latitude;
+        float longitude = SystemData::getInstance().gps.longitude;
+        request->send(200, "text/html", "<h1>Boat32</h1><p>Latitude: " + String(latitude) + "</p><p>Longitude: " + String(longitude) + "</p>");
+    });
+
+    server.on("/control-system", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Send control system data from singleton class
+        uint8_t pump_mask = SystemData::getInstance().controlSystem.pump_mask;
+        float dac_output = SystemData::getInstance().controlSystem.dac_output;
+        request->send(200, "text/html", "<h1>Boat32</h1><p>Pump mask: " + String(pump_mask) + "</p><p>DAC output: " + String(dac_output) + "</p>");
+    });
 
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -334,18 +346,18 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
                 auto it = blinkRateMap.find(buffer[1]);
                 if (it != blinkRateMap.end()) {
                     xTaskNotify(ledBlinkerTaskHandle, (uint32_t)it->second, eSetValueWithOverwrite);
-                    Serial.printf("Blink rate set to %c\n", buffer[1]);
+                    Serial.printf("\nBlink rate set to %c\n", buffer[1]);
                     break;
                 }
                 else {
-                    Serial.printf("Invalid blink rate: %c\n", buffer[1]);
+                    Serial.printf("\nInvalid blink rate: %c\n", buffer[1]);
                     break;
                 }
             break;
         }
 
         case 'R' : {
-                Serial.printf("Sending request to %s\n", (const char*)&buffer[1]);
+                Serial.printf("\nSending request to %s\n", (const char*)&buffer[1]);
                 HTTPClient http;
                 http.begin((const char*)&buffer[1]);
                 int httpCode = http.GET();
@@ -354,7 +366,7 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
                     Serial.println(payload);
                 }
                 else {
-                    Serial.printf("Request failed, error: %s\n", http.errorToString(httpCode).c_str());
+                    Serial.printf("\nRequest failed, error: %s\n", http.errorToString(httpCode).c_str());
                 }
                 http.end();
                  break;
@@ -389,7 +401,7 @@ void TemperatureReaderTask(void* parameter) {
     // You should then physically label the probes with tags or stripes as to differentiate them.
     DeviceAddress thermal_probe_zero = { 0x28, 0xFF, 0x25, 0x61, 0xA3, 0x16, 0x05, 0x16 }; 
     DeviceAddress thermal_probe_one = {0}; // If you have more than one probe, add the address here
-    
+
     while (true) {
         sensors.requestTemperatures(); // Send the command to update temperature readings
         float temperature_motor = sensors.getTempC(thermal_probe_zero);
@@ -451,13 +463,13 @@ void PrintProbeAddress(DeviceAddress device_address) {
 /// @param sensors 
 void DallasDeviceScanIndex(DallasTemperature &sensors) {
     sensors.begin(); // Scan for devices on the OneWire bus.
-    Serial.printf("Found %d devices\n", sensors.getDeviceCount());
+    Serial.printf("\nFound %d devices\n", sensors.getDeviceCount());
     for (uint8_t i = 0; i < sensors.getDeviceCount(); i++) {
         DeviceAddress device_address;
         if (!sensors.getAddress(device_address, i)) {
             Serial.printf("Unable to find address for Device %d\n", i);
         } else {
-            Serial.printf("Device %d Address: ", i);
+            Serial.printf("Device %d Address: \n", i);
             PrintProbeAddress(device_address);
         }
     }
@@ -729,7 +741,9 @@ void EncoderControl(void* parameter) {
     static int32_t previousPosition = 0;
     constexpr uint8_t dac_resolution = 255; // 8-bit DAC
     constexpr uint8_t max_number_steps = 50;
-    constexpr int16_t max_output_voltage = 3300; // mV
+    constexpr int16_t max_dac_output_voltage = 3300; // mV
+    constexpr int16_t max_dac_amplified_output_voltage = 5000; // mV
+    
     static uint32_t print_timer = 0;
     encoder.readAndReset(); // Reset encoder position to zero.
   
@@ -738,12 +752,15 @@ void EncoderControl(void* parameter) {
         currentPosition = constrain(currentPosition, 0, max_number_steps);
         if (currentPosition != previousPosition) {
             previousPosition = currentPosition;
-            dacWrite(dac_pin, currentPosition * dac_resolution / max_number_steps);
+            uint8_t discrete_output = currentPosition * dac_resolution / max_number_steps;
+            dacWrite(dac_pin, discrete_output);
+            SystemData::getInstance().controlSystem.dac_output = (float)discrete_output * max_dac_amplified_output_voltage / dac_resolution;
         }
         if (millis() - print_timer > 4000) {
             print_timer = millis();
             Serial.printf("\n[DAC]Encoder position: %d%%\n", currentPosition * 100 / max_number_steps);
-            Serial.printf("[DAC] output: %d mV\n", currentPosition * max_output_voltage / max_number_steps);
+            Serial.printf("[DAC] output: %d mV\n", currentPosition * max_dac_output_voltage / max_number_steps);
+            Serial.printf("[DAC] amplified output: %d mV\n", currentPosition * max_dac_amplified_output_voltage / max_number_steps);
         }
         vTaskDelay(5);
     }
@@ -788,6 +805,8 @@ void AuxiliaryReaderTask(void* parameter) {
         bool is_port_pump_on = port_pump_voltage_reading > pump_threshold_voltage;
         bool is_starboard_pump_on = starboard_pump_voltage_reading > pump_threshold_voltage;
 
+        SystemData::getInstance().controlSystem.pump_mask = (is_port_pump_on << 1) | is_starboard_pump_on;
+
         Serial.printf("\n[AUX]Battery voltage: %.2f V\n", battery_voltage_reading);
         Serial.printf("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
         Serial.printf("[AUX]Starboard pump: %s\n", is_starboard_pump_on ? "ON" : "OFF");
@@ -818,7 +837,7 @@ void setup() {
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
-    //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
+    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTaskHandle);
