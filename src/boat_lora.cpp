@@ -428,7 +428,13 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel, QueueH
 
 void SerialChannelReaderTask(void* parameter) {
 
-    QueueHandle_t* routing_queue = (QueueHandle_t*)parameter;
+    // QueueHandle_t is already a pointer, so there is no need to use the & operator when passing to the task
+    // nor casting it to a pointer again when receiving it.
+    QueueHandle_t routing_queue = (QueueHandle_t)parameter;
+    while(routing_queue == NULL) {
+        Serial.println("[CHANNEL]Routing queue is NULL");
+        vTaskDelay(2000);
+    }
     
     while (true) {
         static uint32_t last_reception_time = 0;
@@ -437,7 +443,7 @@ void SerialChannelReaderTask(void* parameter) {
             Serial.printf("\n[CHANNEL]Waiting for Mavlink on channel %d\n", MAVLINK_COMM_0);
         }
 
-        if (ProcessStreamChannel(Serial, MAVLINK_COMM_0, *routing_queue)) {
+        if (ProcessStreamChannel(Serial, MAVLINK_COMM_0, routing_queue)) {
             xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
             last_reception_time = millis();
         }
@@ -570,20 +576,21 @@ void LoraTransmissionTask(void* parameter) {
     }
     Serial.println("Starting LoRa succeeded!");
 
-    QueueHandle_t routing_queue = *(QueueHandle_t*)parameter;
-
+    // QueueHandle_t is already a pointer, so there is no need to use the & operator when passing to the task
+    // nor casting it to a pointer again when receiving it.
+    QueueHandle_t routing_queue = (QueueHandle_t)parameter;
 
     while (true) {
         mavlink_message_t message;
-        //if (xQueueReceive(routing_queue, &message, pdMS_TO_TICKS(1000))) {
-        //    uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-        //    uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-        //    LoRa.beginPacket();
-        //    LoRa.write(buffer, len);
-        //    LoRa.endPacket();
-        //    xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify LED blinker task to blink LED
-        //    DEBUG_PRINTF("Sent message with ID %d\n", message.msgid);
-        //}
+        if (xQueueReceive(routing_queue, &message, pdMS_TO_TICKS(1000))) {
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+            LoRa.beginPacket();
+            LoRa.write(buffer, len);
+            LoRa.endPacket();
+            xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify LED blinker task to blink LED
+            DEBUG_PRINTF("Sent message with ID %d\n", message.msgid);
+        }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -613,8 +620,8 @@ void setup() {
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
     QueueHandle_t router_queue = xQueueCreate(10, sizeof (mavlink_message_t));
-    xTaskCreate(SerialChannelReaderTask, "companionReader", 4096, &router_queue, 1, NULL);
-    xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, &router_queue, 1, NULL);
+    xTaskCreate(SerialChannelReaderTask, "companionReader", 4096, router_queue, 1, NULL);
+    xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, router_queue, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 void loop() {
