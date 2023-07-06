@@ -345,7 +345,7 @@ void CockpitDisplayTask(void* parameter) {
     }
 }
 
-bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel, QueueHandle_t routing_queue) {
+bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
 
     mavlink_message_t message;
     mavlink_status_t status; 
@@ -419,23 +419,29 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel, QueueH
             }
 
             // Route to radio queue
-            xQueueSend(routing_queue, &message, 0);    
+            //xQueueSend(routing_queue, &message, 0);    
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+            LoRa.beginPacket();
+            LoRa.write(buffer, len);
+            LoRa.endPacket();
             return true;
         }
     }
+    vTaskDelay(10);
     return false;
 }
 
 void SerialChannelReaderTask(void* parameter) {
 
-    // QueueHandle_t is already a pointer, so there is no need to use the & operator when passing to the task
-    // nor casting it to a pointer again when receiving it.
-    QueueHandle_t routing_queue = (QueueHandle_t)parameter;
-    while(routing_queue == NULL) {
-        Serial.println("[CHANNEL]Routing queue is NULL");
-        vTaskDelay(2000);
+    LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
+    LoRa.setSyncWord(SYNC_WORD);
+    while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
+        Serial.println("Starting LoRa failed!");
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
-    
+    Serial.println("Starting LoRa succeeded!");
+ 
     while (true) {
         static uint32_t last_reception_time = 0;
         if (millis() - last_reception_time >= 10000) {
@@ -443,7 +449,7 @@ void SerialChannelReaderTask(void* parameter) {
             Serial.printf("\n[CHANNEL]Waiting for Mavlink on channel %d\n", MAVLINK_COMM_0);
         }
 
-        if (ProcessStreamChannel(Serial, MAVLINK_COMM_0, routing_queue)) {
+        if (ProcessStreamChannel(Serial, MAVLINK_COMM_0)) {
             xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
             last_reception_time = millis();
         }
@@ -619,9 +625,8 @@ void setup() {
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
-    QueueHandle_t router_queue = xQueueCreate(10, sizeof (mavlink_message_t));
-    xTaskCreate(SerialChannelReaderTask, "companionReader", 4096, router_queue, 1, NULL);
-    xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, router_queue, 1, NULL);
+    xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 1, NULL);
+    //xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 void loop() {
