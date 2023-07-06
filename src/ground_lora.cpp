@@ -366,7 +366,7 @@ void SerialChannelReaderTask(void* parameter) {
 void LoraReceiverTask(void* parameter) {
 
     LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
-    LoRa.setSyncWord(0xFD);
+    LoRa.setSyncWord(SYNC_WORD);
     while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
         Serial.println("Starting LoRa failed!");
         vTaskDelay(pdMS_TO_TICKS(3500));

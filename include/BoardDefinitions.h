@@ -1,10 +1,11 @@
 #include <Arduino.h>
 #include <Wire.h> 
 #include "SSD1306Wire.h" 
-using timer = uint32_t;
+
 //LORA_V1_6_OLED + SDCard + SX1276 LoRa
 #define LORA_V1_6_OLED  1
 #define LORA_PERIOD 915     
+#define SYNC_WORD 0xFE
 
 // TFT display with I2C interface
 #define OLED_CLASS_OBJ  SSD1306Wire
