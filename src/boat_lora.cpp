@@ -422,7 +422,10 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
             //xQueueSend(routing_queue, &message, 0);    
             uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
             uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-            LoRa.beginPacket();
+            if (!LoRa.beginPacket()) {
+                DEBUG_PRINTF("[TX]Failed to begin packet\n", NULL);
+                return false;
+            }
             LoRa.write(buffer, len);
             LoRa.endPacket();
             return true;
@@ -433,14 +436,6 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
 }
 
 void SerialChannelReaderTask(void* parameter) {
-
-    LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
-    LoRa.setSyncWord(SYNC_WORD);
-    while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
-        Serial.println("Starting LoRa failed!");
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-    Serial.println("Starting LoRa succeeded!");
  
     while (true) {
         static uint32_t last_reception_time = 0;
@@ -612,8 +607,21 @@ void StackHighWaterMeasurerTask(void* parameter) {
             Serial.printf("[Task] %s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
         }
         Serial.printf("[Task]System free heap: %d\n", esp_get_free_heap_size());
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(25000));
     }
+}
+
+void StartLora() {
+    LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
+    LoRa.setSyncWord(SYNC_WORD);
+    LoRa.setCodingRate4(5);
+    LoRa.setSignalBandwidth(500E3);
+    LoRa.setSpreadingFactor(7);
+    while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
+        Serial.println("Starting LoRa failed!");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    Serial.println("Starting LoRa succeeded!");
 }
 
 void setup() {
@@ -621,6 +629,7 @@ void setup() {
     Serial.begin(115200);
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
+    StartLora();
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);

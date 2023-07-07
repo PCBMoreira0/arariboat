@@ -1,0 +1,37 @@
+1
+2 Verde (4)
+3
+4 Verde (5)
+5 Azul
+6 Roxo
+7 Amarelo
+8 Laranja
+9
+10
+
+2 - Verde forte - 4
+4 - Verde claro - 5
+5 - Azul - 3
+6 - Marrom - 9
+7 - Laranja-claro - 6
+8 - Cinza - 7
+
+
+1- Vcc
+2- Gnd
+3- Azul
+4- Verde(2)
+5- Verde (4)
+6- Amarelo
+
+7- Laranja
+8- Vcc
+9- Roxo
+
+
+5 --> 3// Azul forte
+2 --> 4// Verde forte
+4 --> 5// Verde claro
+7 --> 6// Laranja claro
+8 --> 7// Cinza
+6 --> 9// Marrom
