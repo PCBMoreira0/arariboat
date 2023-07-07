@@ -82,13 +82,15 @@ void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
 
     constexpr int ledPin = 25; // Pin 25 is the onboard LED on the TGGO LoRa V2.1.6 board.
+    constexpr uint8_t buzzer_pin = 21;
     pinMode(ledPin, OUTPUT);
+    pinMode(buzzer_pin, OUTPUT);
 
     uint32_t blinkRate = BlinkRate::Slow;
     uint32_t previousBlinkRate = blinkRate;
 
     // Lambda function to blink the LED fast 4 times and then return to the previous blink rate.
-    auto FastBlinkPulse = [](int pin) {
+    auto FastBlinkPulse = [](int pin, int pulses = 4) {
         for (int i = 0; i < 4; i++) {
             digitalWrite(pin, HIGH); vTaskDelay(pdMS_TO_TICKS(50));
             digitalWrite(pin, LOW);  vTaskDelay(pdMS_TO_TICKS(50));
@@ -102,7 +104,8 @@ void LedBlinkerTask(void* parameter) {
         // Set blink rate to the value received from the notification
         if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0)) {
             if (blinkRate == BlinkRate::Pulse) {
-                FastBlinkPulse(ledPin);
+                FastBlinkPulse(ledPin, 4);
+                FastBlinkPulse(buzzer_pin, 2);
                 blinkRate = previousBlinkRate;
             }
         }
