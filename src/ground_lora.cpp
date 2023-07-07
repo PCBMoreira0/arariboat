@@ -363,17 +363,22 @@ void SerialChannelReaderTask(void* parameter) {
     }
 }
 
-void LoraReceiverTask(void* parameter) {
-
+void StartLora() {
     LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
     LoRa.setSyncWord(SYNC_WORD);
+    LoRa.setCodingRate4(5);
+    LoRa.setSignalBandwidth(500E3);
+    LoRa.setSpreadingFactor(7); // Receiver and transmitter must have the same spreading factor. 
     while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
         Serial.println("Starting LoRa failed!");
         vTaskDelay(pdMS_TO_TICKS(3500));
     }
 
-    xTaskNotify(displayScreenHandle, (uint32_t)LoraStatus::Idle, eSetValueWithOverwrite);    
+    //xTaskNotify(displayScreenHandle, (uint32_t)LoraStatus::Idle, eSetValueWithOverwrite);    
     Serial.println("Starting LoRa succeeded!");
+}
+
+void LoraReceiverTask(void* parameter) {
 
     constexpr mavlink_channel_t channel = MAVLINK_COMM_2;
     while (true) {
@@ -490,28 +495,43 @@ void DisplayScreenTask(void* parameter) {
         screen.drawString(0, 35, "Sequence: " + String(mavlink_get_channel_status(MAVLINK_COMM_2)->current_rx_seq));
         screen.display();
     };
-
+    
     screen.init();
     screen.flipScreenVertically(); // Rotate screen to get correct orientation
-    ShowHomeScreen();
-    
+    constexpr uint16_t update_rate = 500;
+    static uint32_t last_update_time = 0;
+    int16_t interval;
     while (true) {
         for (int i = 0; i < NumberPages; i++) {
             switch (i) {
                 case Home:
-                    ShowHomeScreen();
-                    vTaskDelay(pdMS_TO_TICKS(3000));
+                    interval = 2000;
                     break;
                 case Wifi:
-                    ShowWifiScreen();
-                    vTaskDelay(pdMS_TO_TICKS(4000));
+                    interval = 2000;
                     break;
                 case Lora:
-                    ShowLoraScreen();
-                    vTaskDelay(pdMS_TO_TICKS(4000));
+                    interval = 45000;
                     break;
             }
+            
+            while (millis() - last_update_time < interval) {
+                switch (i) {
+                    case Home:
+                        ShowHomeScreen();
+                        break;
+                    case Wifi:
+                        ShowWifiScreen();
+                        break;
+                    case Lora:
+                        ShowLoraScreen();
+                        break;
+                }
+                vTaskDelay(pdMS_TO_TICKS(update_rate));
+            }
+            last_update_time = millis();
         }
+
     }
 }
 
@@ -526,7 +546,7 @@ void StackHighWaterMeasurerTask(void* parameter) {
             Serial.printf("[Task]%s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
         }
         Serial.printf("[Task]System free heap: %d\n", esp_get_free_heap_size());
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(25000));
     }
 }
 
@@ -534,12 +554,13 @@ void setup() {
 
     Serial.begin(115200);
     mavlinkQueue = xQueueCreate(10, sizeof(mavlink_message_t));
+    StartLora();
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, &displayScreenHandle);
-    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
+    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialChannelReaderTask, "companionReader", 4096, NULL, 1, NULL);
-    xTaskCreate(LoraReceiverTask, "loraReceiver", 4096, NULL, 1, &loraReceiverHandle);
+    xTaskCreate(LoraReceiverTask, "loraReceiver", 4096, NULL, 3, &loraReceiverHandle);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
