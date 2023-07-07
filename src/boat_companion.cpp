@@ -439,7 +439,7 @@ void TemperatureReaderTask(void* parameter) {
         #endif
 
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify the LED blinker task to blink the LED
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(8000))) { // Wait for notification from serial reader task to scan for new probes
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20000))) { // Wait for notification from serial reader task to scan for new probes
             DallasDeviceScanIndex(sensors); 
         }
     }
@@ -585,9 +585,9 @@ void InstrumentationReaderTask(void* parameter) {
     while (!is_adc_initialized) {
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite); // Blinks the LED to indicate that the ADC is not initialized yet.
         for (auto address : adc_addresses) {
-            Serial.printf("Trying to initialize ADS1115 at address 0x%x\n", address);
+            Serial.printf("\n[ADS]Trying to initialize ADS1115 at address 0x%x\n", address);
             if (adc.begin(address)) {
-                Serial.printf("ADS1115 successfully initialized at address 0x%x\n", address);
+                Serial.printf("\n[ADS]ADS1115 successfully initialized at address 0x%x\n", address);
                 is_adc_initialized = true;
                 xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite); // Return LED to default blink rate.
                 break;
@@ -653,7 +653,7 @@ void InstrumentationReaderTask(void* parameter) {
             .voltage_battery = calibrated_voltage_battery
         };
         
-        mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_1, &message, &instrumentation);
+        mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
@@ -664,7 +664,7 @@ void InstrumentationReaderTask(void* parameter) {
         Wire.endTransmission();
         #endif
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
-        vTaskDelay(pdMS_TO_TICKS(3500));
+        vTaskDelay(pdMS_TO_TICKS(8000));
     }
 }
 
@@ -745,6 +745,8 @@ void EncoderControl(void* parameter) {
     constexpr int16_t max_dac_amplified_output_voltage = 5000; // mV
     
     static uint32_t print_timer = 0;
+    static uint32_t can_print_timer = 0;;
+    static bool can_print = false;
     encoder.readAndReset(); // Reset encoder position to zero.
   
     while (true) {
@@ -752,16 +754,25 @@ void EncoderControl(void* parameter) {
         currentPosition = constrain(currentPosition, 0, max_number_steps);
         if (currentPosition != previousPosition) {
             previousPosition = currentPosition;
+            can_print_timer = millis();
+            can_print = true;
             uint8_t discrete_output = currentPosition * dac_resolution / max_number_steps;
             dacWrite(dac_pin, discrete_output);
             SystemData::getInstance().controlSystem.dac_output = (float)discrete_output * max_dac_amplified_output_voltage / dac_resolution;
         }
-        if (millis() - print_timer > 4000) {
+
+        if ((millis() - can_print_timer > 2000) && can_print) {
+            can_print_timer = millis();
+            can_print = false;
+        }
+
+        if ((millis() - print_timer > 500) && can_print) {
             print_timer = millis();
             Serial.printf("\n[DAC]Encoder position: %d%%\n", currentPosition * 100 / max_number_steps);
             Serial.printf("[DAC] output: %d mV\n", currentPosition * max_dac_output_voltage / max_number_steps);
             Serial.printf("[DAC] amplified output: %d mV\n", currentPosition * max_dac_amplified_output_voltage / max_number_steps);
         }
+
         vTaskDelay(5);
     }
 }
@@ -811,7 +822,7 @@ void AuxiliaryReaderTask(void* parameter) {
         Serial.printf("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
         Serial.printf("[AUX]Starboard pump: %s\n", is_starboard_pump_on ? "ON" : "OFF");
 
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
 
@@ -825,7 +836,7 @@ void StackHighWaterMeasurerTask(void* parameter) {
             Serial.printf("[Task]%s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
         }
         Serial.printf("[Task]System free heap: %d\n", esp_get_free_heap_size());
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(25000));
     }
 }
 
