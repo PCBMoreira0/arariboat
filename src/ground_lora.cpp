@@ -82,7 +82,7 @@ void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
 
     constexpr int ledPin = 25; // Pin 25 is the onboard LED on the TGGO LoRa V2.1.6 board.
-    constexpr uint8_t buzzer_pin = 21;
+    constexpr uint8_t buzzer_pin = 4;
     pinMode(ledPin, OUTPUT);
     pinMode(buzzer_pin, OUTPUT);
 
