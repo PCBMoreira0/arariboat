@@ -491,13 +491,6 @@ void DisplayScreenTask(void* parameter) {
 
         auto ssid = WiFi.SSID();
         String ip = WiFi.localIP().toString();
-        //RSSI Value Range	WiFi Signal Strength
-        //RSSI > -30 dBm	 Amazing
-        //RSSI < – 55 dBm	 Very good signal
-        //RSSI < – 67 dBm	 Fairly Good
-        //RSSI < – 70 dBm	 Okay
-        //RSSI < – 80 dBm	 Not good
-        //RSSI < – 90 dBm	 Extremely weak signal (unusable)
         int8_t rssi = WiFi.RSSI();
         String rssi_state = "";
         switch(rssi) {
@@ -536,37 +529,54 @@ void DisplayScreenTask(void* parameter) {
         screen.display();
     };
 
-    auto ShowLoraScreen = [&]() {
+    auto ShowMavlinkChannel = [&]() {
         screen.clear();
         screen.setFont(ArialMT_Plain_10);
         screen.setTextAlignment(TEXT_ALIGN_LEFT);
         // Display LoRa status
-        screen.drawString((screen.getWidth() - 40) / 2, 0, "[LoRa]");
-        screen.drawString(0, 15, "LoRa RSSI: " + String(LoRa.packetRssi()));
-        screen.drawString(0, 25, "LoRa SNR: " + String(LoRa.packetSnr()));
+        screen.drawString((screen.getWidth() - 40) / 2, 0, "[Mavlink]");
+        screen.drawString(0, 15, "Channel 0");
+        // Draw last id and sequence from mavlink_channel
+        screen.drawString(0, 25, "Seq: " + String(mavlink_get_channel_status(MAVLINK_COMM_0)->current_rx_seq));
         screen.display();
     };
 
     screen.init();
     screen.flipScreenVertically(); // Rotate screen to get correct orientation
-    ShowHomeScreen();
+    
+    uint32_t page_interval;
+    static uint32_t last_update_time = millis();
+    constexpr int32_t update_rate = 400;
     
     while (true) {
         for (int i = 0; i < NumberPages; i++) {
             switch (i) {
                 case Home:
-                    ShowHomeScreen();
-                    vTaskDelay(pdMS_TO_TICKS(3000));
+                    page_interval = 1500;
                     break;
                 case Wifi:
-                    ShowWifiScreen();
-                    vTaskDelay(pdMS_TO_TICKS(4000));
+                    page_interval = 3000;
                     break;
                 case Lora:
-                    ShowLoraScreen();
-                    vTaskDelay(pdMS_TO_TICKS(4000));
+                    page_interval = 5000;
                     break;
             }
+
+            while (millis() - last_update_time < page_interval) {
+                switch (i) {
+                    case Home:
+                        ShowHomeScreen();
+                        break;
+                    case Wifi:
+                        ShowWifiScreen();
+                        break;
+                    case Lora:
+                        ShowMavlinkChannel();
+                        break;
+                }
+                vTaskDelay(pdMS_TO_TICKS(update_rate));
+            }
+            last_update_time = millis();
         }
     }
 }
