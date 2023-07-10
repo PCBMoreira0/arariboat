@@ -436,8 +436,8 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
             LoRa.endPacket();
             return true;
         }
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
-    vTaskDelay(10);
     return false;
 }
 
