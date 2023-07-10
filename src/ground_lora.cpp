@@ -8,6 +8,7 @@
 #include <Wire.h> // I2C library for communicating with LoRa32 board.
 #include <LoRa.h> // SandeepMistry physical layer library
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
+#include <WebSerial.h>
 
 #define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
@@ -172,12 +173,27 @@ void ServerTask(void* parameter) {
 
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    
+
+
+
+    auto recvMsg = [&](uint8_t *data, size_t len){
+        WebSerial.println("Received Data...");
+        String d = "";
+        for(int i=0; i < len; i++){
+            d += char(data[i]);
+        }
+        WebSerial.println(d);
+    };
+
+    WebSerial.begin(&server);
+    /* Attach Message Callback */
+    WebSerial.msgCallback(recvMsg);  
     // Attach OTA update handler to the server and initialize the server.
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
     server.begin();
 
     while (true) {
+        WebSerial.printf("Millis=%lu\n", millis());
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
@@ -383,6 +399,19 @@ void StartLora() {
 
 void LoraReceiverTask(void* parameter) {
 
+    LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
+    LoRa.setSyncWord(SYNC_WORD);
+    LoRa.setCodingRate4(5);
+    LoRa.setSignalBandwidth(500E3);
+    LoRa.setSpreadingFactor(7); // Receiver and transmitter must have the same spreading factor. 
+    while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
+        Serial.println("Starting LoRa failed!");
+        vTaskDelay(pdMS_TO_TICKS(3500));
+    }
+
+    //xTaskNotify(displayScreenHandle, (uint32_t)LoraStatus::Idle, eSetValueWithOverwrite);    
+    Serial.println("Starting LoRa succeeded!");
+
     constexpr mavlink_channel_t channel = MAVLINK_COMM_2;
     while (true) {
 
@@ -557,7 +586,7 @@ void setup() {
 
     Serial.begin(115200);
     mavlinkQueue = xQueueCreate(10, sizeof(mavlink_message_t));
-    StartLora();
+    //StartLora();
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, &displayScreenHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
@@ -569,5 +598,10 @@ void setup() {
 
 void loop() {
 
+    //WebSerial.print(F("IP address: "));
+    //WebSerial.println(WiFi.localIP());
+    //WebSerial.printf("Millis=%lu\n", millis());
+    //WebSerial.printf("Free heap=[%u]\n", ESP.getFreeHeap());
+    //vTaskDelay(pdMS_TO_TICKS(2000));
 }
 
