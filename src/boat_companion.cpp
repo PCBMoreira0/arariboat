@@ -147,7 +147,7 @@ void WifiConnectionTask(void* parameter) {
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial.println("\n[WIFI]Connected to WiFi");
                     xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
-                    xTaskNotifyGive(serverTaskHandle);
+                    xTaskNotifyGive(vpnConnectionTaskHandle);
                     break;
                 }
             }          
@@ -199,13 +199,12 @@ void ServerTask(void* parameter) {
         request->send(200, "text/html", "<h1>Boat32</h1><p>Pump mask: " + String(pump_mask) + "</p><p>DAC output: " + String(dac_output) + "</p>");
     });
 
-    // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
+    // Wait for notification from VPN connection task before starting the server.
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     
     // Attach g update handler to the server and initialize the server.
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
     server.begin();
-    xTaskNotifyGive(vpnConnectionTaskHandle); // Notify VPN connection task that server is running
 
     while (true) {
         ulTaskNotifyTake(pdTRUE, 500);
@@ -286,14 +285,13 @@ void VPNConnectionTask(void* parameter) {
     const char* husarnetJoinCode = "fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p";
     const char* dashboardURL = "default";
 
-    // Wait for notification from Server task that server is running in order to begin the VPN connection
+    // Wait for notification that WiFi is connected before starting the VPN.
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     Husarnet.selfHostedSetup(dashboardURL);
     Husarnet.join(husarnetJoinCode, hostName);
     Husarnet.start();
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(2000));
-    }
+    xTaskNotifyGive(serverTaskHandle); // Notify Server task that VPN is connected
+    vTaskDelete(NULL); // Delete this task after VPN is connected
 }
 
 template <std::size_t N>
@@ -849,8 +847,8 @@ void setup() {
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
