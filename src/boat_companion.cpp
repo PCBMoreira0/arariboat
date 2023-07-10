@@ -843,7 +843,7 @@ void StackHighWaterMeasurerTask(void* parameter) {
 
 void setup() {
 
-    Serial.begin(115200);
+    Serial.begin(4800);
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
