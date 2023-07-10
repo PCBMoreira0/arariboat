@@ -11,6 +11,7 @@
 #include <LoRa.h> // SandeepMistry physical layer library
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
 #include <ESPmDNS.h> // Allows to resolve hostnames to IP addresses within a local network.
+#include <StreamString.h>
 
 #define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
@@ -157,6 +158,12 @@ void ServerTask(void* parameter) {
         ESP.restart();
     });
 
+    server.on("/lora-dump", HTTP_GET, [](AsyncWebServerRequest *request) {
+        uint8_t buffer[256];
+        StreamString stream;
+        LoRa.dumpRegisters(stream);
+        request->send(200, "text/html", stream.c_str());
+    });
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     
