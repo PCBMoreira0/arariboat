@@ -392,15 +392,18 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 void DallasDeviceScanIndex(DallasTemperature& sensors);
 void TemperatureReaderTask(void* parameter) {
 
-    constexpr uint8_t temperaturePin = 4; // GPIO used for OneWire communication
-    OneWire oneWire(temperaturePin); // Setup a oneWire instance to communicate with any devices that use the OneWire protocol
-    DallasTemperature sensors(&oneWire); // Pass our oneWire reference to Dallas Temperature sensor, which uses the OneWire protocol.
+    constexpr uint8_t power_pin = 2; // GPIO used to power the temperature probes
+    constexpr uint8_t temperature_bus_pin = 15; // GPIO used for OneWire communication
+    
+    pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH); // Set power pin to HIGH to power the temperature probes
+    OneWire one_wire(temperature_bus_pin); // Setup a one_wire instance to communicate with any devices that use the OneWire protocol
+    DallasTemperature sensors(&one_wire); // Pass our one_wire reference to Dallas Temperature sensor, which uses the OneWire protocol.
     
     // Each probe has a unique 8-byte address. Use the scanIndex method to initially find the addresses of the probes. 
     // Then hardcode the addresses into the program. This is done to avoid the overhead of scanning for the addresses every time the function is called.
     // You should then physically label the probes with tags or stripes as to differentiate them.
-    DeviceAddress thermal_probe_zero = { 0x28, 0xFF, 0x25, 0x61, 0xA3, 0x16, 0x05, 0x16 }; 
-    DeviceAddress thermal_probe_one = {0}; // If you have more than one probe, add the address here
+    DeviceAddress thermal_probe_zero = {0x28, 0x6B, 0xA7, 0x16, 0xA8, 0x01, 0x3C, 0x7C};
+    DeviceAddress thermal_probe_one = { 0 }; 
 
     while (true) {
         sensors.requestTemperatures(); // Send the command to update temperature readings
@@ -409,13 +412,13 @@ void TemperatureReaderTask(void* parameter) {
 
         #ifdef DEBUG_PRINTF
         if (temperature_motor == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[7]);
+            DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
         } else {
-            DEBUG_PRINTF("[Temperature][%x]Motor: %f\n", thermal_probe_zero[7], temperature_motor); // [Temperature][last byte of probe address] = value is the format
+            DEBUG_PRINTF("[Temperature][%x]Motor: %f\n", thermal_probe_zero[7], temperature_motor); // [Temperature][First byte of probe address] = value is the format
         }
 
         if (temperature_mppt == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[7]);
+            DEBUG_PRINTF("[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[0]);
         } else {
             DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[7], temperature_mppt);
         }
