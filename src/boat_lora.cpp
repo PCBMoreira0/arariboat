@@ -164,6 +164,7 @@ void ServerTask(void* parameter) {
         LoRa.dumpRegisters(stream);
         request->send(200, "text/html", stream.c_str());
     });
+
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     
@@ -303,7 +304,7 @@ void CockpitDisplayTask(void* parameter) {
     widget_mppt_current.analogMeter(240, 180, mppt_amps_zero_scale, mppt_amps_full_scale, "A", "0", "10", "20", "30", "40"); 
   
     while (true) {
-        constexpr int loop_period = 35; // Display updates every 35 ms
+        constexpr int loop_period = 500; 
         static uint32_t update_time = 0;  
 
         auto test_sine_wave = [&]() {
@@ -354,7 +355,7 @@ void CockpitDisplayTask(void* parameter) {
         };
 
         update_display();
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(loop_period));
     }
 }
 
@@ -461,6 +462,7 @@ void SerialChannelReaderTask(void* parameter) {
             xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
             last_reception_time = millis();
         }
+
         vTaskDelay(25);
     }
 }
@@ -653,11 +655,11 @@ void setup() {
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
     StartLora();
-    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
+    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
-    //xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
-    xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 1, NULL);
+    xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 1, &cockpitDisplayHandle);
+    xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 3, NULL);
     //xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
