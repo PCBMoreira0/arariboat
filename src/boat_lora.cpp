@@ -642,14 +642,14 @@ void StartLora() {
 
 void setup() {
 
-    Serial.begin(115200);
+    Serial.begin(4800);
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
     StartLora();
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 3, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
-    xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
+    //xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 3, &cockpitDisplayHandle);
     xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 1, NULL);
     //xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
