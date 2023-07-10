@@ -400,7 +400,7 @@ void TemperatureReaderTask(void* parameter) {
     // Each probe has a unique 8-byte address. Use the scanIndex method to initially find the addresses of the probes. 
     // Then hardcode the addresses into the program. This is done to avoid the overhead of scanning for the addresses every time the function is called.
     // You should then physically label the probes with tags or stripes as to differentiate them.
-    DeviceAddress thermal_probe_zero = {0x28, 0x6B, 0xA7, 0x16, 0xA8, 0x01, 0x3C, 0x7C};
+    DeviceAddress thermal_probe_zero = {0x28, 0x86, 0x1C, 0x07, 0xD6, 0x01, 0x3C, 0x8C};
     DeviceAddress thermal_probe_one = { 0 }; 
 
     while (true) {
@@ -412,13 +412,13 @@ void TemperatureReaderTask(void* parameter) {
         if (temperature_motor == DEVICE_DISCONNECTED_C) {
             DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
         } else {
-            DEBUG_PRINTF("[Temperature][%x]Motor: %f\n", thermal_probe_zero[7], temperature_motor); // [Temperature][First byte of probe address] = value is the format
+            DEBUG_PRINTF("\n[Temperature][%x]Motor: %f\n", thermal_probe_zero[0], temperature_motor); // [Temperature][First byte of probe address] = value is the format
         }
 
         if (temperature_mppt == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[0]);
+            DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[0]);
         } else {
-            DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[7], temperature_mppt);
+            DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[0], temperature_mppt);
         }
         #endif
 
@@ -440,7 +440,7 @@ void TemperatureReaderTask(void* parameter) {
         #endif
 
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify the LED blinker task to blink the LED
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20000))) { // Wait for notification from serial reader task to scan for new probes
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10000))) { // Wait for notification from serial reader task to scan for new probes
             DallasDeviceScanIndex(sensors); 
         }
     }
