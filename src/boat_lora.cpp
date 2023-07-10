@@ -10,6 +10,7 @@
 #include <Wire.h> // I2C library for communicating with LoRa32 board.
 #include <LoRa.h> // SandeepMistry physical layer library
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
+#include <ESPmDNS.h> // Allows to resolve hostnames to IP addresses within a local network.
 
 #define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
@@ -146,18 +147,23 @@ void ServerTask(void* parameter) {
     // The callbacks must have the signature void(AsyncWebServerRequest *request). Any function with this signature can be used.
     // Preferably, use lambda functions to keep the code in the same place.
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", "<h1>Lora32</h1><p>WiFi connected: " + WiFi.SSID() + "</p><p>IP address: " + WiFi.localIP().toString() + "</p>");
+        request->send(200, "text/html", "<h1>Boat-Lora</h1><p>WiFi connected: " + WiFi.SSID() + "</p><p>IP address: " + WiFi.localIP().toString() + "</p>");
     });
 
     server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
         // log reset message
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Resetting...</p>");
+        request->send(200, "text/html", "<h1>Boat-Lora</h1><p>Resetting...</p>");
         vTaskDelay(pdMS_TO_TICKS(1000));
         ESP.restart();
     });
 
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    
+    // Allow the server to be accessed by hostname instead of IP address.
+    if(!MDNS.begin("boat-lora")) {
+        Serial.println("[MDNS]Error starting mDNS!");
+    }
     
     // Attach OTA update handler to the server and initialize the server.
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
