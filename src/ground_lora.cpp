@@ -98,6 +98,23 @@ void LedBlinkerTask(void* parameter) {
             digitalWrite(pin, LOW);  vTaskDelay(pdMS_TO_TICKS(50));
         }
     };
+
+    // Lambda function to beep the buzzer using PWM
+    auto Beep = [](int pin, int channel, int pulses, int frequency = 1000, int duration = 100) {
+        // Set up the LEDC module with channel 0, 1000 Hz frequency, and 8-bit resolution
+        ledcSetup(channel, 1000, 8);
+        // Attach the LEDC module to the specified pin using channel 0
+        ledcAttachPin(pin, channel);
+        for (int i = 0; i < pulses; i++) {
+            // Set the tone of the beep using the specified frequency and channel 0
+            ledcWriteTone(channel, frequency);
+            // Delay for the specified duration using the vTaskDelay function
+            vTaskDelay(pdMS_TO_TICKS(duration));
+            // Turn off the beep by setting the tone to 0 using channel 0
+            ledcWriteTone(channel, 0);
+            vTaskDelay(pdMS_TO_TICKS(duration));
+        }
+    };
     
     while (true) {
         digitalWrite(ledPin, HIGH); vTaskDelay(pdMS_TO_TICKS(blinkRate));
@@ -106,9 +123,9 @@ void LedBlinkerTask(void* parameter) {
         // Set blink rate to the value received from the notification
         if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0)) {
             if (blinkRate == BlinkRate::Pulse) {
-                FastBlinkPulse(ledPin, 4);
-                FastBlinkPulse(buzzer_pin, 2);
                 blinkRate = previousBlinkRate;
+                FastBlinkPulse(ledPin, 4);
+                Beep(buzzer_pin, 0, 2, 1000, 100);
             }
         }
     }
