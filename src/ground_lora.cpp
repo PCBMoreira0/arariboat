@@ -434,6 +434,7 @@ void LoraReceiverTask(void* parameter) {
                 if (ProcessStreamChannel(LoRa, channel)) {
                     xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
                 }
+                vTaskDelay(pdMS_TO_TICKS(5));
             }
         }
         else {
@@ -589,7 +590,7 @@ void StackHighWaterMeasurerTask(void* parameter) {
 
 void setup() {
 
-    Serial.begin(115200);
+    Serial.begin(4800);
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, &displayScreenHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
