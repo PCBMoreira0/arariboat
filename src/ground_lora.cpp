@@ -590,8 +590,6 @@ void StackHighWaterMeasurerTask(void* parameter) {
 void setup() {
 
     Serial.begin(115200);
-    mavlinkQueue = xQueueCreate(10, sizeof(mavlink_message_t));
-    //StartLora();
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, &displayScreenHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
@@ -603,10 +601,5 @@ void setup() {
 
 void loop() {
 
-    //WebSerial.print(F("IP address: "));
-    //WebSerial.println(WiFi.localIP());
-    //WebSerial.printf("Millis=%lu\n", millis());
-    //WebSerial.printf("Free heap=[%u]\n", ESP.getFreeHeap());
-    //vTaskDelay(pdMS_TO_TICKS(2000));
 }
 
