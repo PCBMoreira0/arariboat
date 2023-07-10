@@ -9,6 +9,7 @@
 #include <LoRa.h> // SandeepMistry physical layer library
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
 #include <WebSerial.h>
+#include <ESPmDNS.h> // Allows to resolve hostnames to IP addresses within a local network.
 
 #define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
@@ -161,7 +162,7 @@ void ServerTask(void* parameter) {
     // The callbacks must have the signature void(AsyncWebServerRequest *request). Any function with this signature can be used.
     // Preferably, use lambda functions to keep the code in the same place.
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", "<h1>Lora32</h1><p>WiFi connected: " + WiFi.SSID() + "</p><p>IP address: " + WiFi.localIP().toString() + "</p>");
+        request->send(200, "text/html", "<h1>Ground-Lora</h1><p>WiFi connected: " + WiFi.SSID() + "</p><p>IP address: " + WiFi.localIP().toString() + "</p>");
     });
 
     server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -173,8 +174,6 @@ void ServerTask(void* parameter) {
 
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-
 
     auto recvMsg = [&](uint8_t *data, size_t len){
         WebSerial.println("Received Data...");
@@ -189,6 +188,12 @@ void ServerTask(void* parameter) {
     /* Attach Message Callback */
     WebSerial.msgCallback(recvMsg);  
     // Attach OTA update handler to the server and initialize the server.
+
+    // Allow the server to be accessed by hostname instead of IP address.
+    if(!MDNS.begin("ground-lora")) {
+        Serial.println("[MDNS]Error starting mDNS!");
+    }
+
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
     server.begin();
 
