@@ -31,10 +31,27 @@ public:
         return instance;
     }
 
+    enum debug_print_flags : uint16_t {
+        None = 0b0000000000,
+        Wifi = 0b0000000001,
+        Server = 0b0000000010,
+        Vpn = 0b0000000100,
+        Serial = 0b0000001000,
+        Temperature = 0b0000010000,
+        Gps = 0b0000100000,
+        Instrumentation = 0b0001000000,
+        Auxiliary = 0b0010000000,
+        Encoder = 0b0100000000,
+        High_water = 0b1000000000,
+        All = 0b1111111111
+    };
+
+    debug_print_flags debug_print = debug_print_flags::All;
     mavlink_instrumentation_t instrumentation;
     mavlink_gps_info_t gps;
     mavlink_temperatures_t temperature;
     mavlink_control_system_t controlSystem;
+
     
 private:
     SystemData() { // Private constructor to avoid multiple instances.
@@ -72,10 +89,10 @@ TaskHandle_t* taskHandles[] = { &ledBlinkerTaskHandle, &wifiConnectionTaskHandle
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
 enum BlinkRate : uint32_t {
-    Slow = 1000,
-    Medium = 500,
-    Fast = 100,
-    Pulse = 1000 // Pulse is a special value that will make the LED blink fast and then return to the previous blink rate.
+    Slow = 2000,
+    Medium = 1000,
+    Fast = 300,
+    Pulse = 100 // Pulse is a special value that will make the LED blink fast and then return to the previous blink rate.
 };
 
 enum GPSPrintOptions : uint32_t {
@@ -89,11 +106,9 @@ void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
 
     constexpr uint8_t ledPin = 2; // Built-in LED pin for the ESP32 DevKit board.
-    constexpr uint8_t buzzer_pin = 26;
     pinMode(ledPin, OUTPUT);
-    dacWrite(buzzer_pin, 0);
-    uint32_t blinkRate = 1000;
-    uint32_t previousBlinkRate = blinkRate;
+    uint32_t blink_rate = BlinkRate::Slow;
+    uint32_t previous_blink_rate = blink_rate;
 
     auto FastBlinkPulse = [](int pin) {
         for (int i = 0; i < 4; i++) {
@@ -101,24 +116,46 @@ void LedBlinkerTask(void* parameter) {
             digitalWrite(pin, LOW);  vTaskDelay(pdMS_TO_TICKS(50));
         }
     };
-    
-    while (true) {
-        digitalWrite(ledPin, HIGH); vTaskDelay(pdMS_TO_TICKS(blinkRate));
-        digitalWrite(ledPin, LOW);  vTaskDelay(pdMS_TO_TICKS(blinkRate));
 
-        if (blinkRate == BlinkRate::Fast) {
-            // 3 beats. Double beep, pause, double beep, pause, double beep, pause.
-            dacWrite(buzzer_pin, 255); vTaskDelay(pdMS_TO_TICKS(100));
-            dacWrite(buzzer_pin, 0); vTaskDelay(pdMS_TO_TICKS(100));
-            dacWrite(buzzer_pin, 255); vTaskDelay(pdMS_TO_TICKS(100));
-            dacWrite(buzzer_pin, 0); vTaskDelay(pdMS_TO_TICKS(200));
+    auto BuzzerWrite = [&]() {
+        constexpr uint8_t buzzer_pin = 26;
+        static uint8_t counter = 0;
+
+        // Define the rhythm pattern
+        constexpr uint8_t pattern[] = {1, 0, 1, 0, 1, 1, 0, 0}; // Example pattern
+
+        // Calculate the position within the pattern
+        uint8_t patternSize = sizeof(pattern) / sizeof(pattern[0]);
+        uint8_t patternPosition = counter % patternSize;
+
+        // Determine the buzzer state based on the pattern
+        bool buzzerState = pattern[patternPosition] != 0;
+
+        if (blink_rate == BlinkRate::Fast) {
+            dacWrite(buzzer_pin, buzzerState ? 150 : 0);
+        } else {
+            dacWrite(buzzer_pin, 0);
         }
-        
+        // Increment the counter
+        counter++;
+    };
+  
+    while (true) {
+
+        static uint32_t previous_blink_time = millis();
+        if (millis() - previous_blink_time > blink_rate) {
+            previous_blink_time = millis();
+            BuzzerWrite();
+            digitalWrite(ledPin, !digitalRead(ledPin));
+        }
+           
         // Set blink rate to the value received from the notification
-        if (xTaskNotifyWait(0, 0, (uint32_t*)&blinkRate, 0)) {
-            if (blinkRate == BlinkRate::Pulse) {
+        static uint32_t received_value = BlinkRate::Slow;
+        if (xTaskNotifyWait(0, 0, (uint32_t*)&received_value, 100)) {
+            if (received_value == BlinkRate::Pulse) {
                 FastBlinkPulse(ledPin);
-                blinkRate = previousBlinkRate;
+            } else {
+                blink_rate = received_value;
             }
         }
     }
@@ -350,7 +387,6 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
                 auto it = blinkRateMap.find(buffer[1]);
                 if (it != blinkRateMap.end()) {
                     xTaskNotify(ledBlinkerTaskHandle, (uint32_t)it->second, eSetValueWithOverwrite);
-                    Serial.printf("\nBlink rate set to %c\n", buffer[1]);
                     break;
                 }
                 else {
@@ -432,16 +468,18 @@ void TemperatureReaderTask(void* parameter) {
         float temperature_mppt = sensors.getTempC(thermal_probe_one);
 
         #ifdef DEBUG_PRINTF
-        if (temperature_motor == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
-        } else {
-            DEBUG_PRINTF("\n[Temperature][%x]Motor: %f\n", thermal_probe_zero[0], temperature_motor); // [Temperature][First byte of probe address] = value is the format
-        }
+        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Temperature) {
+            if (temperature_motor == DEVICE_DISCONNECTED_C) {
+                DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
+            } else {
+                DEBUG_PRINTF("\n[Temperature][%x]Motor: %f\n", thermal_probe_zero[0], temperature_motor); // [Temperature][First byte of probe address] = value is the format
+            }
 
-        if (temperature_mppt == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[0]);
-        } else {
-            DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[0], temperature_mppt);
+            if (temperature_mppt == DEVICE_DISCONNECTED_C) {
+                DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[0]);
+            } else {
+                DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[0], temperature_mppt);
+            }
         }
         #endif
 
@@ -643,13 +681,15 @@ void InstrumentationReaderTask(void* parameter) {
         float current_motor = CalculateCurrentT201(current_motor_pin_voltage, selected_full_scale_range, motor_burden_resistance);
         float current_battery = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
         float current_mppt = CalculateCurrentLA55(current_mppt_pin_voltage, current_conversion_ratio, mppt_burden_resistance);
-        DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
-                        "[Instrumentation]Battery: %fV\n"
-                        "[Instrumentation]Calibrated battery: %fV\n"
-                        "[Instrumentation]Motor current: %fV\n"
-                        "[Instrumentation]Battery current: %fV\n"
-                        "[Instrumentation]MPPT current: %fV\n",
-        voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
+        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Instrumentation) {
+            DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
+                            "[Instrumentation]Battery: %fV\n"
+                            "[Instrumentation]Calibrated battery: %fV\n"
+                            "[Instrumentation]Motor current: %fV\n"
+                            "[Instrumentation]Battery current: %fV\n"
+                            "[Instrumentation]MPPT current: %fV\n",
+            voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
+        }
 
         SystemData::getInstance().instrumentation.voltage_battery = calibrated_voltage_battery;
         SystemData::getInstance().instrumentation.current_zero = current_motor;
@@ -837,8 +877,13 @@ void AuxiliaryReaderTask(void* parameter) {
 
         if ((offset_adc_reference < 0.0f || sensitivity_adc < 0.0f) || asked_to_calibrate) {
 
+            auto previous_print_state = SystemData::getInstance().debug_print;
+            SystemData::getInstance().debug_print = SystemData::getInstance().debug_print_flags::Auxiliary;
             Serial.printf("\n[AUX]Calibrating current sensor\n"
-                            "[AUX]Make sure that no current is flowing through the sensor during initialization");
+                            "[AUX]Make sure that no current is flowing through the sensor during initialization\n"
+                            "[AUX]Press 'C' to continue\n");
+            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             
             asked_to_calibrate = false;
             float offset_adc_sum = 0.0f;
@@ -851,11 +896,12 @@ void AuxiliaryReaderTask(void* parameter) {
             }
             offset_adc_reference = offset_adc_sum / number_samples;
             Serial.printf("\n[AUX]Offset adc: %.2f\n", offset_adc_reference);
-            Serial.printf("\n[AUX]Please input the current flowing through the sensor starting with a 'C'");
+            Serial.printf("\n[AUX]Turn on the current source and input it starting with a 'C'");
             
             uint32_t notification_value;
-            while (!xTaskNotifyWait(0, ULONG_MAX, &notification_value, 5000)) {
-                Serial.printf("\n[AUX]Please input the current flowing through the sensor starting with a 'C'");
+            while (!xTaskNotifyWait(0, ULONG_MAX, &notification_value, 8000)) {
+                Serial.printf("\n[AUX]Please input the current flowing through the sensor starting with a 'C'\n");
+
             }
 
             float current = (float)notification_value;
@@ -873,6 +919,8 @@ void AuxiliaryReaderTask(void* parameter) {
             preferences.putFloat("offset", offset_adc_reference);
             preferences.putFloat("sensitivity", sensitivity_adc);
             preferences.end(); 
+            SystemData::getInstance().debug_print = previous_print_state;
+            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
         }
     };
 
@@ -903,15 +951,19 @@ void AuxiliaryReaderTask(void* parameter) {
         static uint32_t print_timer = 0;
         if (millis() - print_timer > 3000) {
             print_timer = millis();
-            Serial.printf("\n[AUX]Battery voltage: %.2fV\n", battery_voltage);
-            Serial.printf("[AUX]Battery current: %.2fA\n", battery_current);
-            Serial.printf("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
-            Serial.printf("[AUX]Starboard pump: %s\n", is_starboard_pump_on ? "ON" : "OFF");
+            if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Auxiliary) {
+                DEBUG_PRINTF("\n[AUX]Battery voltage: %.2fV\n", battery_voltage);
+                DEBUG_PRINTF("[AUX]Battery current: %.2fA\n", battery_current);
+                DEBUG_PRINTF("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
+                DEBUG_PRINTF("[AUX]Starboard pump: %s\n", is_starboard_pump_on ? "ON" : "OFF");
+            }
         }
 
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100))) {
             asked_to_calibrate = true;
             CalibrateCurrentSensor(battery_current_pin, offset_adc_reference, sensitivity_adc, asked_to_calibrate);
+            //DEBUG_PRINTF("Passed calibration at line %d\n", __LINE__);
+            //xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
         }
     }
 }
@@ -921,11 +973,13 @@ void AuxiliaryReaderTask(void* parameter) {
 /// @param parameter Unused. Just here to comply with the task function signature.
 void StackHighWaterMeasurerTask(void* parameter) {
     while (true) {
-        Serial.printf("\n");
-        for (int i = 0; i < taskHandlesSize; i++) {
-            Serial.printf("[Task]%s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
+        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Temperature) {
+            Serial.printf("\n");
+            for (int i = 0; i < taskHandlesSize; i++) {
+                Serial.printf("[Task]%s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
+            }
+            Serial.printf("[Task]System free heap: %d\n", esp_get_free_heap_size());            
         }
-        Serial.printf("[Task]System free heap: %d\n", esp_get_free_heap_size());
         vTaskDelay(pdMS_TO_TICKS(25000));
     }
 }
