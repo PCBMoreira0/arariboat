@@ -5,6 +5,7 @@
 #include "HttpClientFunctions.hpp" // Auxiliary functions for sending HTTP requests.
 #include "Husarnet.h" // IPV6 for ESP32 to enable peer-to-peer communication between devices inside a Husarnet network.
 #include "ESPAsyncWebServer.h" // Make sure to include Husarnet before this.
+#include <ESPmDNS.h> // Allows to resolve hostnames to IP addresses within a local network.
 #include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
 #include "DallasTemperature.h" // For the DS18B20 temperature probes.
 #include "TinyGPSPlus.h" // GPS NMEA sentence parser.
@@ -64,6 +65,8 @@ private:
     SystemData& operator=(SystemData const&) = delete; // Delete assignment operator.
     SystemData(SystemData&&) = delete; // Delete move constructor.
 };
+
+SystemData& systemData = SystemData::getInstance(); // Get a reference to the singleton instance to make accessing it easier.
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -190,7 +193,8 @@ void WifiConnectionTask(void* parameter) {
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial.println("\n[WIFI]Connected to WiFi");
                     xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
-                    xTaskNotifyGive(vpnConnectionTaskHandle);
+                    xTaskNotifyGive(vpnConnectionTaskHandle); 
+                    xTaskNotifyGive(serverTaskHandle);
                     break;
                 }
             }          
@@ -221,31 +225,36 @@ void ServerTask(void* parameter) {
 
     server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Send system instrumentation data from singleton class
-        float current_motor = SystemData::getInstance().instrumentation.current_zero;
-        float current_battery = SystemData::getInstance().instrumentation.current_one;
-        float current_mppt = SystemData::getInstance().instrumentation.current_two;
-        float voltage_battery = SystemData::getInstance().instrumentation.voltage_battery;
+        float current_motor = systemData.instrumentation.current_zero;
+        float current_battery = systemData.instrumentation.current_one;
+        float current_mppt = systemData.instrumentation.current_two;
+        float voltage_battery = systemData.instrumentation.voltage_battery;
         request->send(200, "text/html", "<h1>Boat32</h1><p>Current motor: " + String(current_motor) + "</p><p>Current battery: " + String(current_battery) + "</p><p>Current MPPT: " + String(current_mppt) + "</p><p>Voltage battery: " + String(voltage_battery) + "</p>");
     });
     
     server.on("/gps", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Send GPS data from singleton class
-        float latitude = SystemData::getInstance().gps.latitude;
-        float longitude = SystemData::getInstance().gps.longitude;
+        float latitude = systemData.gps.latitude;
+        float longitude = systemData.gps.longitude;
         request->send(200, "text/html", "<h1>Boat32</h1><p>Latitude: " + String(latitude) + "</p><p>Longitude: " + String(longitude) + "</p>");
     });
 
     server.on("/control-system", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Send control system data from singleton class
-        uint8_t pump_mask = SystemData::getInstance().controlSystem.pump_mask;
-        float dac_output = SystemData::getInstance().controlSystem.dac_output;
+        uint8_t pump_mask = systemData.controlSystem.pump_mask;
+        float dac_output = systemData.controlSystem.dac_output;
         request->send(200, "text/html", "<h1>Boat32</h1><p>Pump mask: " + String(pump_mask) + "</p><p>DAC output: " + String(dac_output) + "</p>");
     });
 
-    // Wait for notification from VPN connection task before starting the server.
-    //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    //Wait for notification from WiFi connection task before starting the server.
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+    // Allow the server to be accessed by hostname instead of IP address.
+    if(!MDNS.begin("boat-companion")) {
+        Serial.println("[MDNS]Error starting mDNS!");
+    }
     
-    // Attach g update handler to the server and initialize the server.
+    // Attach the update handler to the server and initialize the server.
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
     server.begin();
 
@@ -330,10 +339,10 @@ void VPNConnectionTask(void* parameter) {
 
     // Wait for notification that WiFi is connected before starting the VPN.
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
     Husarnet.selfHostedSetup(dashboardURL);
     Husarnet.join(husarnetJoinCode, hostName);
     Husarnet.start();
-    xTaskNotifyGive(serverTaskHandle); // Notify Server task that VPN is connected
     vTaskDelete(NULL); // Delete this task after VPN is connected
 }
 
@@ -468,7 +477,7 @@ void TemperatureReaderTask(void* parameter) {
         float temperature_mppt = sensors.getTempC(thermal_probe_one);
 
         #ifdef DEBUG_PRINTF
-        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Temperature) {
+        if (systemData.debug_print & SystemData::debug_print_flags::Temperature) {
             if (temperature_motor == DEVICE_DISCONNECTED_C) {
                 DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
             } else {
@@ -681,7 +690,7 @@ void InstrumentationReaderTask(void* parameter) {
         float current_motor = CalculateCurrentT201(current_motor_pin_voltage, selected_full_scale_range, motor_burden_resistance);
         float current_battery = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
         float current_mppt = CalculateCurrentLA55(current_mppt_pin_voltage, current_conversion_ratio, mppt_burden_resistance);
-        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Instrumentation) {
+        if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
             DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
                             "[Instrumentation]Battery: %fV\n"
                             "[Instrumentation]Calibrated battery: %fV\n"
@@ -691,10 +700,10 @@ void InstrumentationReaderTask(void* parameter) {
             voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
         }
 
-        SystemData::getInstance().instrumentation.voltage_battery = calibrated_voltage_battery;
-        SystemData::getInstance().instrumentation.current_zero = current_motor;
-        SystemData::getInstance().instrumentation.current_one = current_battery;
-        SystemData::getInstance().instrumentation.current_two = current_mppt;
+        systemData.instrumentation.voltage_battery = calibrated_voltage_battery;
+        systemData.instrumentation.current_zero = current_motor;
+        systemData.instrumentation.current_one = current_battery;
+        systemData.instrumentation.current_two = current_mppt;
 
         // Prepare and send Mavlink message
         mavlink_message_t message;
@@ -805,7 +814,7 @@ void EncoderControl(void* parameter) {
             can_print = true;
             uint8_t discrete_output = currentPosition * dac_resolution / max_number_steps;
             dacWrite(dac_pin, discrete_output);
-            SystemData::getInstance().controlSystem.dac_output = (float)discrete_output * max_dac_amplified_output_voltage / dac_resolution;
+            systemData.controlSystem.dac_output = (float)discrete_output * max_dac_amplified_output_voltage / dac_resolution;
         }
 
         if ((millis() - can_print_timer > 2000) && can_print) {
@@ -877,8 +886,8 @@ void AuxiliaryReaderTask(void* parameter) {
 
         if ((offset_adc_reference < 0.0f || sensitivity_adc < 0.0f) || asked_to_calibrate) {
 
-            auto previous_print_state = SystemData::getInstance().debug_print;
-            SystemData::getInstance().debug_print = SystemData::getInstance().debug_print_flags::Auxiliary;
+            auto previous_print_state = systemData.debug_print;
+            systemData.debug_print = systemData.debug_print_flags::Auxiliary;
             Serial.printf("\n[AUX]Calibrating current sensor\n"
                             "[AUX]Make sure that no current is flowing through the sensor during initialization\n"
                             "[AUX]Press 'C' to continue\n");
@@ -919,7 +928,7 @@ void AuxiliaryReaderTask(void* parameter) {
             preferences.putFloat("offset", offset_adc_reference);
             preferences.putFloat("sensitivity", sensitivity_adc);
             preferences.end(); 
-            SystemData::getInstance().debug_print = previous_print_state;
+            systemData.debug_print = previous_print_state;
             xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
         }
     };
@@ -946,12 +955,12 @@ void AuxiliaryReaderTask(void* parameter) {
         bool is_port_pump_on = port_pump_voltage_reading > pump_threshold_voltage;
         bool is_starboard_pump_on = starboard_pump_voltage_reading > pump_threshold_voltage;
 
-        SystemData::getInstance().controlSystem.pump_mask = (is_port_pump_on << 1) | is_starboard_pump_on;
+        systemData.controlSystem.pump_mask = (is_port_pump_on << 1) | is_starboard_pump_on;
 
         static uint32_t print_timer = 0;
         if (millis() - print_timer > 3000) {
             print_timer = millis();
-            if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Auxiliary) {
+            if (systemData.debug_print & SystemData::debug_print_flags::Auxiliary) {
                 DEBUG_PRINTF("\n[AUX]Battery voltage: %.2fV\n", battery_voltage);
                 DEBUG_PRINTF("[AUX]Battery current: %.2fA\n", battery_current);
                 DEBUG_PRINTF("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
@@ -973,7 +982,7 @@ void AuxiliaryReaderTask(void* parameter) {
 /// @param parameter Unused. Just here to comply with the task function signature.
 void StackHighWaterMeasurerTask(void* parameter) {
     while (true) {
-        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Temperature) {
+        if (systemData.debug_print & SystemData::debug_print_flags::Temperature) {
             Serial.printf("\n");
             for (int i = 0; i < taskHandlesSize; i++) {
                 Serial.printf("[Task]%s has %d bytes of free stack\n", pcTaskGetTaskName(*taskHandles[i]), uxTaskGetStackHighWaterMark(*taskHandles[i]));
@@ -984,18 +993,18 @@ void StackHighWaterMeasurerTask(void* parameter) {
     }
 }
 
-void setup() {
+void setup() {\
 
     Serial.begin(4800);
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
-    //xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
-    //xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
-    //xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
+    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
+    xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 3, &vpnConnectionTaskHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
-    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 5, &instrumentationReaderTaskHandle);
+    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
     xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     xTaskCreate(EncoderControl, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
