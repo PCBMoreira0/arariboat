@@ -1,5 +1,6 @@
 #include <Arduino.h> // Main Arduino library, required for projects that use the Arduino framework.
 #include <WiFi.h> // Main library for WiFi connectivity, also used by AsyncWebServer.
+#include <ArduinoJson.h> // Library for parsing and generating JSON for data exchange between the boat and the ground station via HTTP.
 #include <unordered_map> // Hashtable for storing WiFi credentials.
 #include "HTTPClient.h" // HTTP client for sending requests to a listening server.
 #include "HttpClientFunctions.hpp" // Auxiliary functions for sending HTTP requests.
@@ -108,8 +109,8 @@ enum GPSPrintOptions : uint32_t {
 void FastBlinkPulse(int pin);
 void LedBlinkerTask(void* parameter) {
 
-    constexpr uint8_t ledPin = 2; // Built-in LED pin for the ESP32 DevKit board.
-    pinMode(ledPin, OUTPUT);
+    constexpr uint8_t led_pin = 2; // Built-in LED pin for the ESP32 DevKit board.
+    pinMode(led_pin, OUTPUT);
     uint32_t blink_rate = BlinkRate::Slow;
     uint32_t previous_blink_rate = blink_rate;
 
@@ -149,14 +150,14 @@ void LedBlinkerTask(void* parameter) {
         if (millis() - previous_blink_time > blink_rate) {
             previous_blink_time = millis();
             BuzzerWrite();
-            digitalWrite(ledPin, !digitalRead(ledPin));
+            digitalWrite(led_pin, !digitalRead(led_pin));
         }
            
         // Set blink rate to the value received from the notification
         static uint32_t received_value = BlinkRate::Slow;
         if (xTaskNotifyWait(0, 0, (uint32_t*)&received_value, 100)) {
             if (received_value == BlinkRate::Pulse) {
-                FastBlinkPulse(ledPin);
+                FastBlinkPulse(led_pin);
             } else {
                 blink_rate = received_value;
             }
@@ -218,25 +219,54 @@ void ServerTask(void* parameter) {
 
     server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
         // log reset message
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Resetting...</p>");
+        request->send(200, "text/html", "<h1>Boat-Companion</h1><p>Resetting...</p>");
         vTaskDelay(pdMS_TO_TICKS(1000));
         ESP.restart();
     });
 
     server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Send system instrumentation data from singleton class
+        
+        // Send system instrumentation data
         float current_motor = systemData.instrumentation.current_zero;
         float current_battery = systemData.instrumentation.current_one;
         float current_mppt = systemData.instrumentation.current_two;
         float voltage_battery = systemData.instrumentation.voltage_battery;
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Current motor: " + String(current_motor) + "</p><p>Current battery: " + String(current_battery) + "</p><p>Current MPPT: " + String(current_mppt) + "</p><p>Voltage battery: " + String(voltage_battery) + "</p>");
+        
+        constexpr uint16_t doc_size = 128;
+        StaticJsonDocument<doc_size> doc;
+        doc["current_motor"] = current_motor;
+        doc["current_battery"] = current_battery;
+        doc["current_mppt"] = current_mppt;
+        doc["voltage_battery"] = voltage_battery;
+        
+        // Send json using char array
+        char output[doc_size];
+        serializeJson(doc, output);
+        request->send(200, "application/json", output);
     });
     
     server.on("/gps", HTTP_GET, [](AsyncWebServerRequest *request) {
+        
         // Send GPS data from singleton class
         float latitude = systemData.gps.latitude;
         float longitude = systemData.gps.longitude;
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Latitude: " + String(latitude) + "</p><p>Longitude: " + String(longitude) + "</p>");
+        float speed = systemData.gps.speed;
+        float course = systemData.gps.course;
+        uint8_t satellites = systemData.gps.satellites_visible;
+
+        constexpr uint16_t doc_size = 200;
+        StaticJsonDocument<doc_size> doc;
+        doc["latitude"] = latitude;
+        doc["longitude"] = longitude;
+        doc["speed"] = speed;
+        doc["course"] = course;
+        doc["satellites"] = satellites;
+
+        // Send json using char array
+        char output[doc_size];
+        serializeJson(doc, output);
+        request->send(200, "application/json", output);
+
     });
 
     server.on("/control-system", HTTP_GET, [](AsyncWebServerRequest *request) {
