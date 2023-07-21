@@ -11,6 +11,7 @@
 #include "DallasTemperature.h" // For the DS18B20 temperature probes.
 #include "TinyGPSPlus.h" // GPS NMEA sentence parser.
 #include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "arariboat\SystemData.hpp" // Singleton class to hold system wide data
 #include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain amplifier Analog-Digital Converter for measuring current and voltage.
 #include <SPI.h> // Required for the ADS1115 ADC.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
@@ -23,51 +24,6 @@
 #else
 #define DEBUG_PRINTF(message, ...)
 #endif
-
-// Singleton class for storing system-data that needs to be accessed by multiple tasks.
-class SystemData {
-
-public:
-    static SystemData& getInstance() {
-        static SystemData instance;
-        return instance;
-    }
-
-    enum debug_print_flags : uint16_t {
-        None = 0b0000000000,
-        Wifi = 0b0000000001,
-        Server = 0b0000000010,
-        Vpn = 0b0000000100,
-        Serial = 0b0000001000,
-        Temperature = 0b0000010000,
-        Gps = 0b0000100000,
-        Instrumentation = 0b0001000000,
-        Auxiliary = 0b0010000000,
-        Encoder = 0b0100000000,
-        High_water = 0b1000000000,
-        All = 0b1111111111
-    };
-
-    debug_print_flags debug_print = debug_print_flags::All;
-    mavlink_instrumentation_t instrumentation;
-    mavlink_gps_info_t gps;
-    mavlink_temperatures_t temperature;
-    mavlink_control_system_t controlSystem;
-
-    
-private:
-    SystemData() { // Private constructor to avoid multiple instances.
-        instrumentation = { 0 };
-        gps = { 0 };
-        temperature = { 0 };
-        controlSystem = { 0 };
-    }
-    SystemData(SystemData const&) = delete; // Delete copy constructor.
-    SystemData& operator=(SystemData const&) = delete; // Delete assignment operator.
-    SystemData(SystemData&&) = delete; // Delete move constructor.
-};
-
-SystemData& systemData = SystemData::getInstance(); // Get a reference to the singleton instance to make accessing it easier.
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -227,17 +183,17 @@ void ServerTask(void* parameter) {
     server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
         
         // Send system instrumentation data
-        float current_motor = systemData.instrumentation.current_zero;
-        float current_battery = systemData.instrumentation.current_one;
-        float current_mppt = systemData.instrumentation.current_two;
-        float voltage_battery = systemData.instrumentation.voltage_battery;
+        float battery_voltage = systemData.instrumentationSystem.battery_voltage;
+        float motor_current = systemData.instrumentationSystem.motor_current;
+        float battery_current = systemData.instrumentationSystem.battery_current;
+        float mppt_current = systemData.instrumentationSystem.mppt_current;
         
         constexpr uint16_t doc_size = 128;
         StaticJsonDocument<doc_size> doc;
-        doc["current_motor"] = current_motor;
-        doc["current_battery"] = current_battery;
-        doc["current_mppt"] = current_mppt;
-        doc["voltage_battery"] = voltage_battery;
+        doc["battery_voltage"] = battery_voltage;
+        doc["motor_current"] = motor_current;
+        doc["battery_current"] = battery_current;
+        doc["mppt_current"] = mppt_current;
         
         // Send json using char array
         char output[doc_size];
@@ -248,11 +204,11 @@ void ServerTask(void* parameter) {
     server.on("/gps", HTTP_GET, [](AsyncWebServerRequest *request) {
         
         // Send GPS data from singleton class
-        float latitude = systemData.gps.latitude;
-        float longitude = systemData.gps.longitude;
-        float speed = systemData.gps.speed;
-        float course = systemData.gps.course;
-        uint8_t satellites = systemData.gps.satellites_visible;
+        float latitude = systemData.gpsSystem.latitude;
+        float longitude = systemData.gpsSystem.longitude;
+        float speed = systemData.gpsSystem.speed;
+        float course = systemData.gpsSystem.course;
+        uint8_t satellites = systemData.gpsSystem.satellites_visible;
 
         constexpr uint16_t doc_size = 200;
         StaticJsonDocument<doc_size> doc;
@@ -269,11 +225,12 @@ void ServerTask(void* parameter) {
 
     });
 
-    server.on("/control-system", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/auxiliary-system", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Send control system data from singleton class
-        uint8_t pump_mask = systemData.controlSystem.pump_mask;
-        float dac_output = systemData.controlSystem.dac_output;
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Pump mask: " + String(pump_mask) + "</p><p>DAC output: " + String(dac_output) + "</p>");
+        uint8_t pump_mask = systemData.auxiliarySystem.pumps;
+        float aux_current = systemData.auxiliarySystem.current;
+        float aux_voltage = systemData.auxiliarySystem.voltage;
+        request->send(200, "text/plain", "Pump mask: " + String(pump_mask) + "\nAux current: " + String(aux_current) + "\nAux voltage: " + String(aux_voltage));
     });
 
     //Wait for notification from WiFi connection task before starting the server.
@@ -526,7 +483,8 @@ void TemperatureReaderTask(void* parameter) {
         mavlink_message_t message;
         mavlink_temperatures_t temperatures = {
             .temperature_motor = temperature_motor,
-            .temperature_mppt = temperature_mppt
+            .temperature_battery = 0.0f,
+            .temperature_mppt = temperature_mppt,
         };
         mavlink_msg_temperatures_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &temperatures);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
@@ -705,20 +663,20 @@ void InstrumentationReaderTask(void* parameter) {
         // As we are using the 4 analog inputs for each of the 4 sensors, single ended measurements are being used in order to access all 4 sensors.
         // When using single ended mode, the maximum output code is 0x7FFF(32767), which corresponds to the full-scale input voltage.
 
-        float voltage_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
-        float current_motor_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
+        float battery_voltage_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
+        float motor_current_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
         float current_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
         float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
-        //DEBUG_PRINTF("\n[Instrumentation-PIN-VOLTAGE]Battery voltage: %f, Motor voltage: %f, Battery voltage: %f, MPPT voltage: %f\n", voltage_battery_pin_voltage, current_motor_pin_voltage, current_battery_pin_voltage, current_mppt_pin_voltage);
+        //DEBUG_PRINTF("\n[Instrumentation-PIN-VOLTAGE]Battery voltage: %f, Motor voltage: %f, Battery voltage: %f, MPPT voltage: %f\n", battery_voltage_pin_voltage, motor_current_pin_voltage, current_battery_pin_voltage, current_mppt_pin_voltage);
 
         // Calibrate the voltage by comparing the value of voltage_primary_resistor_drop variable against the actual voltage drop on the primary resistor using a multimeter. 
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
-        float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(voltage_battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
-        float voltage_battery = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
-        float calibrated_voltage_battery = LinearCorrection(voltage_battery, 1.0025059f, 0.0f);
+        float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_voltage_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
+        float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
+        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 1.0025059f, 0.0f);
         
-        float current_motor = CalculateCurrentT201(current_motor_pin_voltage, selected_full_scale_range, motor_burden_resistance);
-        float current_battery = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
+        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, selected_full_scale_range, motor_burden_resistance);
+        float battery_current = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
         float current_mppt = CalculateCurrentLA55(current_mppt_pin_voltage, current_conversion_ratio, mppt_burden_resistance);
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
             DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
@@ -727,21 +685,21 @@ void InstrumentationReaderTask(void* parameter) {
                             "[Instrumentation]Motor current: %fV\n"
                             "[Instrumentation]Battery current: %fV\n"
                             "[Instrumentation]MPPT current: %fV\n",
-            voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
+            voltage_primary_resistor_drop, battery_voltage, calibrated_battery_voltage, motor_current, battery_current, current_mppt);
         }
 
-        systemData.instrumentation.voltage_battery = calibrated_voltage_battery;
-        systemData.instrumentation.current_zero = current_motor;
-        systemData.instrumentation.current_one = current_battery;
-        systemData.instrumentation.current_two = current_mppt;
+        systemData.instrumentationSystem.battery_voltage = calibrated_battery_voltage;
+        systemData.instrumentationSystem.motor_current = motor_current;
+        systemData.instrumentationSystem.battery_current = battery_current;
+        systemData.instrumentationSystem.mppt_current = current_mppt;
 
         // Prepare and send Mavlink message
         mavlink_message_t message;
         mavlink_instrumentation_t instrumentation = {
-            .current_zero = current_motor,
-            .current_one = current_battery,
-            .current_two = current_mppt,
-            .voltage_battery = calibrated_voltage_battery
+            .battery_voltage = calibrated_battery_voltage,
+            .motor_current = motor_current,
+            .battery_current = battery_current,
+            .mppt_current = current_mppt
         };
         
         mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);
@@ -985,7 +943,7 @@ void AuxiliaryReaderTask(void* parameter) {
         bool is_port_pump_on = port_pump_voltage_reading > pump_threshold_voltage;
         bool is_starboard_pump_on = starboard_pump_voltage_reading > pump_threshold_voltage;
 
-        systemData.controlSystem.pump_mask = (is_port_pump_on << 1) | is_starboard_pump_on;
+        systemData.auxiliarySystem.pumps = (is_port_pump_on << 1) | is_starboard_pump_on;
 
         static uint32_t print_timer = 0;
         if (millis() - print_timer > 3000) {
