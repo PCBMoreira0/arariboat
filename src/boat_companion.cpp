@@ -170,14 +170,108 @@ void ServerTask(void* parameter) {
     // The callbacks must have the signature void(AsyncWebServerRequest *request). Any function with this signature can be used.
     // Preferably, use lambda functions to keep the code in the same place.
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", "<h1>Boat32</h1><p>WiFi connected: " + WiFi.SSID() + "</p><p>IP address: " + WiFi.localIP().toString() + "</p>");
-    });
 
+        // Function to send the combined HTML response
+        auto sendResponse = [&](const String &htmlContent) {
+            request->send(200, "text/html", htmlContent);
+        };
+
+        // Create the HTML content with raw CSS styles
+        String htmlContent = "<html><head><title>Boat-Companion</title>"
+                            "<style>"
+                            "body { font-family: Arial, sans-serif; background-color: #f7f7f7; margin: 0; padding: 0; }"
+                            ".container { padding: 10px; display: flex; flex-wrap: wrap; }"
+                            ".card { flex: 1 0 calc(50% - 20px); margin: 10px; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); }"
+                            ".blue-card { background-color: #0088cc; color: #fff; }"
+                            ".orange-card { background-color: #ff9800; color: #fff; }"
+                            ".spacer { flex-basis: 100%; height: 10px; }" // Added style for grey spacer
+                            "h1, h2 { color: black; font-weight: bold; margin: 0; padding: 0; width: 100%; }"
+                            "h2 { font-size: 18px; }"
+                            "p { color: #333; }"
+                            "</style>"
+                            "</head><body>"
+                            "<div class='container'>";
+
+        // Create blue card for WiFi info
+        htmlContent += "<div class='card blue-card'>";
+        htmlContent += "<h1>Boat Companion</h1>";
+        htmlContent += "<p>WiFi connected: " + WiFi.SSID() + "</p>";
+        htmlContent += "<p>IP address: " + WiFi.localIP().toString() + "</p>";
+        htmlContent += "</div>";
+
+        // Create orange card for Control System data
+        htmlContent += "<div class='card orange-card'>";
+        htmlContent += "<h2>Control System Data</h2>";
+        htmlContent += "<p>DAC Output: " + String(systemData.controlSystem.dac_output) + "</p>";
+        htmlContent += "<p>Potentiometer Signal: " + String(systemData.controlSystem.potentiometer_signal) + "</p>";
+        htmlContent += "</div>";
+
+        // Create blue card for Instrumentation System data
+        htmlContent += "<div class='card blue-card'>";
+        htmlContent += "<h2>Instrumentation System Data</h2>";
+        htmlContent += "<p>Battery Voltage: " + String(systemData.instrumentationSystem.battery_voltage) + "</p>";
+        htmlContent += "<p>Motor Current: " + String(systemData.instrumentationSystem.motor_current) + "</p>";
+        htmlContent += "<p>Battery Current: " + String(systemData.instrumentationSystem.battery_current) + "</p>";
+        htmlContent += "<p>MPPT Current: " + String(systemData.instrumentationSystem.mppt_current) + "</p>";
+        htmlContent += "</div>";
+
+        // Create orange card for GPS System data
+        htmlContent += "<div class='card orange-card'>";
+        htmlContent += "<h2>GPS System Data</h2>";
+        htmlContent += "<p>Latitude: " + String(systemData.gpsSystem.latitude) + "</p>";
+        htmlContent += "<p>Longitude: " + String(systemData.gpsSystem.longitude) + "</p>";
+        htmlContent += "<p>Speed: " + String(systemData.gpsSystem.speed) + "</p>";
+        htmlContent += "<p>Course: " + String(systemData.gpsSystem.course) + "</p>";
+        htmlContent += "<p>Satellites: " + String(systemData.gpsSystem.satellites_visible) + "</p>";
+        htmlContent += "</div>";
+
+        // Create blue card for Auxiliary System data
+        htmlContent += "<div class='card blue-card'>";
+        htmlContent += "<h2>Auxiliary System Data</h2>";
+        htmlContent += "<p>Pump Mask: " + String(systemData.auxiliarySystem.pumps) + "</p>";
+        htmlContent += "<p>Auxiliary Current: " + String(systemData.auxiliarySystem.current) + "</p>";
+        htmlContent += "<p>Auxiliary Voltage: " + String(systemData.auxiliarySystem.voltage) + "</p>";
+        htmlContent += "</div>";
+
+        // Create orange card for Temperature System data
+        htmlContent += "<div class='card orange-card'>";
+        htmlContent += "<h2>Temperature System Data</h2>";
+        htmlContent += "<p>Motor Temperature: " + String(systemData.temperatureSystem.temperature_motor) + "</p>";
+        htmlContent += "<p>Battery Temperature: " + String(systemData.temperatureSystem.temperature_battery) + "</p>";
+        htmlContent += "<p>MPPT Temperature: " + String(systemData.temperatureSystem.temperature_mppt) + "</p>";
+        htmlContent += "</div>";
+
+        // Add grey spacer between cards
+        htmlContent += "<div class='spacer'></div>";
+
+        // Close the container and HTML content
+        htmlContent += "</div></body></html>";
+
+        // Send the final HTML response to the client
+        sendResponse(htmlContent);
+    });
+        
     server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request) {
         // log reset message
         request->send(200, "text/html", "<h1>Boat-Companion</h1><p>Resetting...</p>");
         vTaskDelay(pdMS_TO_TICKS(1000));
         ESP.restart();
+    });
+
+    server.on("/control-system", HTTP_GET, [](AsyncWebServerRequest *request) {
+        
+        float dac_output = systemData.controlSystem.dac_output;
+        float potentiometer_signal = systemData.controlSystem.potentiometer_signal;
+
+        constexpr uint16_t doc_size = 64;
+        StaticJsonDocument<doc_size> doc;
+        doc["dac_output"] = dac_output;
+        doc["potentiometer_signal"] = potentiometer_signal;
+
+        // Send json using char array
+        char output[doc_size];
+        serializeJson(doc, output);
+        request->send(200, "application/json", output);
     });
 
     server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -194,6 +288,26 @@ void ServerTask(void* parameter) {
         doc["motor_current"] = motor_current;
         doc["battery_current"] = battery_current;
         doc["mppt_current"] = mppt_current;
+        
+        // Send json using char array
+        char output[doc_size];
+        serializeJson(doc, output);
+        request->send(200, "application/json", output);
+    });
+
+    // temperatures
+    server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request) {
+        
+        // Send temperature data from singleton class
+        float temperature_motor = systemData.temperatureSystem.temperature_motor;
+        float temperature_battery = systemData.temperatureSystem.temperature_battery;
+        float temperature_mppt = systemData.temperatureSystem.temperature_mppt;
+        
+        constexpr uint16_t doc_size = 128;
+        StaticJsonDocument<doc_size> doc;
+        doc["temperature_motor"] = temperature_motor;
+        doc["temperature_battery"] = temperature_battery;
+        doc["temperature_mppt"] = temperature_mppt;
         
         // Send json using char array
         char output[doc_size];
@@ -230,7 +344,17 @@ void ServerTask(void* parameter) {
         uint8_t pump_mask = systemData.auxiliarySystem.pumps;
         float aux_current = systemData.auxiliarySystem.current;
         float aux_voltage = systemData.auxiliarySystem.voltage;
-        request->send(200, "text/plain", "Pump mask: " + String(pump_mask) + "\nAux current: " + String(aux_current) + "\nAux voltage: " + String(aux_voltage));
+        
+        constexpr uint16_t doc_size = 128;
+        StaticJsonDocument<doc_size> doc;
+        doc["pump_mask"] = pump_mask;
+        doc["aux_current"] = aux_current;
+        doc["aux_voltage"] = aux_voltage;
+
+        // Send json using char array
+        char output[doc_size];
+        serializeJson(doc, output);
+        request->send(200, "application/json", output);
     });
 
     //Wait for notification from WiFi connection task before starting the server.
@@ -995,7 +1119,7 @@ void setup() {\
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
     xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     xTaskCreate(EncoderControl, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
-    xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
+    //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
 void loop() {
