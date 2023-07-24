@@ -4,7 +4,8 @@
 #include <AsyncTCP.h> // Asynchronous TCP library for the ESP32.
 #include <ESPAsyncWebServer.h> // Asynchronous web server for the ESP32.
 #include <AsyncElegantOTA.h> // Over the air updates for the ESP32.
-#include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "arariboat/SystemData.hpp"
 #include <Wire.h> // I2C library for communicating with LoRa32 board.
 #include <LoRa.h> // SandeepMistry physical layer library
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
@@ -30,40 +31,9 @@ TaskHandle_t serialReaderHandle = nullptr;
 TaskHandle_t loraReceiverHandle = nullptr;
 TaskHandle_t highWaterMeasurerHandle = nullptr;
 
-QueueHandle_t mavlinkQueue = nullptr;
-
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
 TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &displayScreenHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &loraReceiverHandle, &highWaterMeasurerHandle };
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
-
-class SystemData {
-public:
-    float voltage_battery;
-    float current_motor;
-    float current_battery;
-    float current_mppt;
-    float aux_voltage_battery;
-    float latitude;
-    float longitude;
-    float temperature_motor;
-    float temperature_mppt;
-    bool is_pump_port_on;
-    bool is_pump_starboard_on;
-};
-
-SystemData systemData = {
-    .voltage_battery = 48.0f,
-    .current_motor = 0.0f,
-    .current_battery = 0.0f,
-    .current_mppt = 0.0f,
-    .aux_voltage_battery = 0.0f,
-    .latitude = -22.909378f,
-    .longitude = -43.117346f,
-    .temperature_motor = 25.0f,
-    .temperature_mppt = 25.0f,
-    .is_pump_port_on = false,
-    .is_pump_starboard_on = false
-};
 
 enum BlinkRate : uint32_t {
     Slow = 1000,
@@ -309,15 +279,15 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     mavlink_instrumentation_t instrumentation;
                     mavlink_msg_instrumentation_decode(&message, &instrumentation);
 
-                    systemData.voltage_battery = instrumentation.voltage_battery;
-                    systemData.current_motor   = instrumentation.current_zero;
-                    systemData.current_battery = instrumentation.current_one;
-                    systemData.current_mppt    = instrumentation.current_two;
+                    systemData.instrumentationSystem.battery_voltage = instrumentation.battery_voltage;
+                    systemData.instrumentationSystem.motor_current   = instrumentation.motor_current;
+                    systemData.instrumentationSystem.battery_current = instrumentation.battery_current;
+                    systemData.instrumentationSystem.mppt_current    = instrumentation.mppt_current;
 
-                    DEBUG_PRINTF("[RX]Battery voltage: %f\n", systemData.voltage_battery);
-                    DEBUG_PRINTF("[RX]Motor current: %f\n", systemData.current_motor);
-                    DEBUG_PRINTF("[RX]Battery current: %f\n", systemData.current_battery);
-                    DEBUG_PRINTF("[RX]MPPT current: %f\n", systemData.current_mppt);
+                    DEBUG_PRINTF("[RX]Battery voltage: %f\n", instrumentation.battery_voltage);
+                    DEBUG_PRINTF("[RX]Motor current: %f\n", instrumentation.motor_current);
+                    DEBUG_PRINTF("[RX]Battery current: %f\n", instrumentation.battery_current);
+                    DEBUG_PRINTF("[RX]MPPT current: %f\n", instrumentation.mppt_current);
                     break;
                 }
                 case MAVLINK_MSG_ID_TEMPERATURES: {
@@ -325,21 +295,26 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     mavlink_temperatures_t temperatures;
                     mavlink_msg_temperatures_decode(&message, &temperatures);
 
-                    systemData.temperature_motor = temperatures.temperature_motor;
-                    systemData.temperature_mppt = temperatures.temperature_mppt;
+                    systemData.temperatureSystem.temperature_motor = temperatures.temperature_motor;
+                    systemData.temperatureSystem.temperature_battery = temperatures.temperature_battery;
+                    systemData.temperatureSystem.temperature_mppt = temperatures.temperature_mppt;
 
                    #ifdef DEBUG_PRINTF
                    #define DEVICE_DISCONNECTED_C -127.0f
-                    if (systemData.temperature_motor == DEVICE_DISCONNECTED_C) {
+                    if (systemData.temperatureSystem.temperature_motor == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("\n[Temperature]Motor: Probe disconnected\n", NULL);
                     } else {
-                        DEBUG_PRINTF("[Temperature]Motor: %f\n", systemData.temperature_motor); // [Temperature][last byte of probe address] = value is the format
+                        DEBUG_PRINTF("[Temperature]Motor: %f\n", systemData.temperatureSystem.temperature_motor); // [Temperature][last byte of probe address] = value is the format
                     }
-
-                    if (systemData.temperature_mppt == DEVICE_DISCONNECTED_C) {
+                    if (systemData.temperatureSystem.temperature_battery == DEVICE_DISCONNECTED_C) {
+                        DEBUG_PRINTF("\n[Temperature]Battery: Probe disconnected\n", NULL);
+                    } else {
+                        DEBUG_PRINTF("[Temperature]Battery: %f\n", systemData.temperatureSystem.temperature_battery); // [Temperature][last byte of probe address] = value is the format
+                    }                  
+                    if (systemData.temperatureSystem.temperature_mppt == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("[Temperature]MPPT: Probe disconnected\n", NULL);
                     } else {
-                        DEBUG_PRINTF("[Temperature]MPPT: %f\n", systemData.temperature_mppt);
+                        DEBUG_PRINTF("[Temperature]MPPT: %f\n", systemData.temperatureSystem.temperature_mppt);
                     }
                     #endif
 
@@ -350,11 +325,11 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     mavlink_gps_info_t gps_info;
                     mavlink_msg_gps_info_decode(&message, &gps_info);
 
-                    systemData.latitude = gps_info.latitude;
-                    systemData.longitude = gps_info.longitude;
+                    systemData.gpsSystem.latitude = gps_info.latitude;
+                    systemData.gpsSystem.longitude = gps_info.longitude;
 
-                    DEBUG_PRINTF("[RX]GPS latitude: %f\n", systemData.latitude);
-                    DEBUG_PRINTF("[RX]GPS longitude: %f\n", systemData.longitude);
+                    DEBUG_PRINTF("[RX]GPS latitude: %f\n", systemData.gpsSystem.latitude);
+                    DEBUG_PRINTF("[RX]GPS longitude: %f\n", systemData.gpsSystem.longitude);
                     break;
                 }
                 default: {
