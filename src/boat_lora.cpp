@@ -242,12 +242,10 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     DEBUG_PRINTF("[RX]Received control system from channel %d\n", channel);
                     mavlink_control_system_t control_system;
                     mavlink_msg_control_system_decode(&message, &control_system);
+                    systemData.controlSystem = control_system;
 
-                    systemData.controlSystem.dac_output = control_system.dac_output;
-                    systemData.controlSystem.potentiometer_signal = control_system.potentiometer_signal;
-
-                    DEBUG_PRINTF("[RX]DAC output: %f\n", control_system.dac_output);
-                    DEBUG_PRINTF("[RX]Potentiometer signal: %f\n", control_system.potentiometer_signal);
+                    DEBUG_PRINTF("[CONTROL]DAC output: %f\n", control_system.dac_output);
+                    DEBUG_PRINTF("[CONTROL]Potentiometer signal: %f\n", control_system.potentiometer_signal);
                     break;
                 }
 
@@ -255,41 +253,33 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     DEBUG_PRINTF("[RX]Received instrumentation from channel %d\n", channel);
                     mavlink_instrumentation_t instrumentation;
                     mavlink_msg_instrumentation_decode(&message, &instrumentation);
+                    systemData.instrumentationSystem = instrumentation;
 
-                    systemData.instrumentationSystem.battery_voltage = instrumentation.battery_voltage;
-                    systemData.instrumentationSystem.motor_current    = instrumentation.motor_current;
-                    systemData.instrumentationSystem.battery_current     = instrumentation.battery_current;
-                    systemData.instrumentationSystem.mppt_current     = instrumentation.mppt_current;
-
-                    DEBUG_PRINTF("[RX]Battery voltage: %fV\n", instrumentation.battery_voltage);
-                    DEBUG_PRINTF("[RX]Motor current: %fA\n", instrumentation.motor_current);
-                    DEBUG_PRINTF("[RX]Battery current: %fA\n", instrumentation.battery_current);
-                    DEBUG_PRINTF("[RX]MPPT current: %fA\n", instrumentation.mppt_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Battery voltage: %f\n", instrumentation.battery_voltage);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Motor current: %f\n", instrumentation.motor_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Battery current: %f\n", instrumentation.battery_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]MPPT current: %f\n", instrumentation.mppt_current);
                     break;
                 }
                 case MAVLINK_MSG_ID_TEMPERATURES: {
-                    Serial.printf("[RX]Received temperatures from channel %d\n", channel);
+                    DEBUG_PRINTF("[RX]Received temperatures from channel %d\n", channel);
                     mavlink_temperatures_t temperatures;
                     mavlink_msg_temperatures_decode(&message, &temperatures);
+                    systemData.temperatureSystem = temperatures;
 
-                    systemData.temperatureSystem.temperature_motor = temperatures.temperature_motor;
-                    systemData.temperatureSystem.temperature_battery = temperatures.temperature_battery;
-                    systemData.temperatureSystem.temperature_mppt = temperatures.temperature_mppt;
-
-                   #ifdef DEBUG_PRINTF
+                    #ifdef DEBUG_PRINTF
                    #define DEVICE_DISCONNECTED_C -127.0f
-                    if (temperatures.temperature_motor == DEVICE_DISCONNECTED_C) {
+                    if (systemData.temperatureSystem.temperature_motor == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("[Temperature]Motor: Probe disconnected\n", NULL);
                     } else {
                         DEBUG_PRINTF("[Temperature]Motor: %f\n", temperatures.temperature_motor); // [Temperature][last byte of probe address] = value is the format
                     }
-                    if (temperatures.temperature_battery == DEVICE_DISCONNECTED_C) {
-                        DEBUG_PRINTF("[Temperature]Battery: Probe disconnected\n", NULL);
+                    if (systemData.temperatureSystem.temperature_battery == DEVICE_DISCONNECTED_C) {
+                        DEBUG_PRINTF("\n[Temperature]Battery: Probe disconnected\n", NULL);
                     } else {
-                        DEBUG_PRINTF("[Temperature]Battery: %f\n", temperatures.temperature_battery);
-                    } 
-
-                    if (temperatures.temperature_mppt == DEVICE_DISCONNECTED_C) {
+                        DEBUG_PRINTF("[Temperature]Battery: %f\n", temperatures.temperature_battery); // [Temperature][last byte of probe address] = value is the format
+                    }                  
+                    if (systemData.temperatureSystem.temperature_mppt == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("[Temperature]MPPT: Probe disconnected\n", NULL);
                     } else {
                         DEBUG_PRINTF("[Temperature]MPPT: %f\n", temperatures.temperature_mppt);
@@ -302,33 +292,25 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     DEBUG_PRINTF("[RX]Received GPS info from channel %d\n", channel);
                     mavlink_gps_info_t gps_info;
                     mavlink_msg_gps_info_decode(&message, &gps_info);
+                    systemData.gpsSystem = gps_info;
 
-                    systemData.gpsSystem.latitude = gps_info.latitude;
-                    systemData.gpsSystem.longitude = gps_info.longitude;
-                    systemData.gpsSystem.course = gps_info.course;
-                    systemData.gpsSystem.speed = gps_info.speed;
-                    systemData.gpsSystem.satellites_visible = gps_info.satellites_visible;
-
-                    DEBUG_PRINTF("[RX]GPS latitude: %f\n", gps_info.latitude);
-                    DEBUG_PRINTF("[RX]GPS longitude: %f\n", gps_info.longitude);
+                    DEBUG_PRINTF("[GPS]Latitude: %f\n", gps_info.latitude);
+                    DEBUG_PRINTF("[GPS]Longitude: %f\n", gps_info.longitude);
                     break;
                 }
                 case MAVLINK_MSG_ID_AUX_SYSTEM: {
                     DEBUG_PRINTF("[RX]Received aux system from channel %d\n", channel);
                     mavlink_aux_system_t aux_system;
                     mavlink_msg_aux_system_decode(&message, &aux_system);
+                    systemData.auxiliarySystem = aux_system;
 
-                    systemData.auxiliarySystem.voltage = aux_system.voltage;
-                    systemData.auxiliarySystem.current = aux_system.current;
-                    systemData.auxiliarySystem.pumps = aux_system.pumps;
-
-                    DEBUG_PRINTF("[RX]Aux system voltage: %f\n", aux_system.voltage);
-                    DEBUG_PRINTF("[RX]Aux system current: %f\n", aux_system.current);
-                    DEBUG_PRINTF("[RX]Aux system pumps: %d\n", aux_system.pumps);
+                    DEBUG_PRINTF("[AUX]Aux system voltage: %f\n", aux_system.voltage);
+                    DEBUG_PRINTF("[AUX]Aux system current: %f\n", aux_system.current);
+                    DEBUG_PRINTF("[AUX]Aux system pumps: %d\n", aux_system.pumps);
                     break;
                 }
                 default: {
-                    Serial.printf("[RX]Received message with ID #%d from channel %d\n", message.msgid, channel);
+                    DEBUG_PRINTF("[RX]Received message with ID #%d from channel %d\n", message.msgid, channel);
                     break;
                 }
             }
@@ -354,7 +336,7 @@ void SerialChannelReaderTask(void* parameter) {
         static uint32_t last_reception_time = 0;
         if (millis() - last_reception_time >= 6000) {
             last_reception_time = millis();
-            Serial.printf("\n[CHANNEL]Waiting for Mavlink on channel %d\n", MAVLINK_COMM_0);
+            Serial.printf("\n[BOAT-LORA]Waiting for Mavlink on channel %d\n", MAVLINK_COMM_0);
         }
 
         if (ProcessStreamChannel(Serial, MAVLINK_COMM_0)) {
