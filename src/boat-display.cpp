@@ -6,7 +6,8 @@
 #include <AsyncElegantOTA.h> // Over the air updates for the ESP32.
 #include <TFT_eSPI.h>     // Hardware-specific library
 #include <TFT_eWidget.h>  // Widget library
-#include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "arariboat/SystemData.hpp"
 #include <Wire.h> // I2C library for communicating with LoRa32 board.
 #include <ESPmDNS.h> // Allows to resolve hostnames to IP addresses within a local network.
 #include <StreamString.h>
@@ -32,32 +33,6 @@ TaskHandle_t highWaterMeasurerHandle = nullptr;
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
 TaskHandle_t* taskHandles[] = { &ledBlinkerHandle, &wifiConnectionHandle, &serverTaskHandle, &serialReaderHandle, &cockpitDisplayHandle, &highWaterMeasurerHandle };
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
-
-// Singleton class for storing system-data that needs to be accessed by multiple tasks.
-class SystemData {
-
-public:
-    static SystemData& getInstance() {
-        static SystemData instance;
-        return instance;
-    }
-
-    mavlink_instrumentation_t instrumentation;
-    mavlink_gps_info_t gps;
-    mavlink_temperatures_t temperature;
-    mavlink_control_system_t controlSystem;
-    
-private:
-    SystemData() { // Private constructor to avoid multiple instances.
-        instrumentation = { 0 };
-        gps = { 0 };
-        temperature = { 0 };
-        controlSystem = { 0 };
-    }
-    SystemData(SystemData const&) = delete; // Delete copy constructor.
-    SystemData& operator=(SystemData const&) = delete; // Delete assignment operator.
-    SystemData(SystemData&&) = delete; // Delete move constructor.
-};
 
 enum BlinkRate : uint32_t {
     Slow = 1000,
@@ -338,10 +313,10 @@ void CockpitDisplayTask(void* parameter) {
             if (millis() - update_time > loop_period) {
                 update_time = millis();
 
-                widget_battery_volts.updateNeedle(SystemData::getInstance().instrumentation.voltage_battery, 0);
-                widget_battery_current.updateNeedle(SystemData::getInstance().instrumentation.current_zero, 0);
-                widget_motor_current.updateNeedle(SystemData::getInstance().instrumentation.current_one , 0);
-                widget_mppt_current.updateNeedle(SystemData::getInstance().instrumentation.current_two, 0);
+                widget_battery_volts.updateNeedle(systemData.instrumentationSystem.battery_voltage, 0);
+                widget_battery_current.updateNeedle(systemData.instrumentationSystem.battery_current , 0);
+                widget_motor_current.updateNeedle(systemData.instrumentationSystem.motor_current , 0);
+                widget_mppt_current.updateNeedle(systemData.instrumentationSystem.mppt_current , 0);
             }
         };
 
@@ -360,43 +335,52 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
         if (mavlink_parse_char(channel, received_byte, &message, &status)) {
             Serial.print('\n');
             switch (message.msgid) {
-                case MAVLINK_MSG_ID_HEARTBEAT: {    
+               case MAVLINK_MSG_ID_HEARTBEAT: {    
                     DEBUG_PRINTF("[RX]Received heartbeat from channel %d\n", channel);
                     break;
                 }
+                case MAVLINK_MSG_ID_CONTROL_SYSTEM: {
+                    DEBUG_PRINTF("[RX]Received control system from channel %d\n", channel);
+                    mavlink_control_system_t control_system;
+                    mavlink_msg_control_system_decode(&message, &control_system);
+                    systemData.controlSystem = control_system;
+
+                    DEBUG_PRINTF("[CONTROL]DAC output: %f\n", control_system.dac_output);
+                    DEBUG_PRINTF("[CONTROL]Potentiometer signal: %f\n", control_system.potentiometer_signal);
+                    break;
+                }
+
                 case MAVLINK_MSG_ID_INSTRUMENTATION: {
-                    Serial.printf("[RX]Received instrumentation from channel %d\n", channel);
+                    DEBUG_PRINTF("[RX]Received instrumentation from channel %d\n", channel);
                     mavlink_instrumentation_t instrumentation;
                     mavlink_msg_instrumentation_decode(&message, &instrumentation);
+                    systemData.instrumentationSystem = instrumentation;
 
-                    SystemData::getInstance().instrumentation.voltage_battery = instrumentation.voltage_battery;
-                    SystemData::getInstance().instrumentation.current_zero    = instrumentation.current_zero;
-                    SystemData::getInstance().instrumentation.current_one     = instrumentation.current_one;
-                    SystemData::getInstance().instrumentation.current_two     = instrumentation.current_two;
-
-                    DEBUG_PRINTF("[RX]Battery voltage: %f\n", instrumentation.voltage_battery);
-                    DEBUG_PRINTF("[RX]Motor current: %f\n", instrumentation.current_zero);
-                    DEBUG_PRINTF("[RX]Battery current: %f\n", instrumentation.current_one);
-                    DEBUG_PRINTF("[RX]MPPT current: %f\n", instrumentation.current_two);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Battery voltage: %f\n", instrumentation.battery_voltage);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Motor current: %f\n", instrumentation.motor_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Battery current: %f\n", instrumentation.battery_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]MPPT current: %f\n", instrumentation.mppt_current);
                     break;
                 }
                 case MAVLINK_MSG_ID_TEMPERATURES: {
-                    Serial.printf("[RX]Received temperatures from channel %d\n", channel);
+                    DEBUG_PRINTF("[RX]Received temperatures from channel %d\n", channel);
                     mavlink_temperatures_t temperatures;
                     mavlink_msg_temperatures_decode(&message, &temperatures);
+                    systemData.temperatureSystem = temperatures;
 
-                    SystemData::getInstance().temperature.temperature_motor = temperatures.temperature_motor;
-                    SystemData::getInstance().temperature.temperature_mppt = temperatures.temperature_mppt;
-
-                   #ifdef DEBUG_PRINTF
+                    #ifdef DEBUG_PRINTF
                    #define DEVICE_DISCONNECTED_C -127.0f
-                    if (temperatures.temperature_motor == DEVICE_DISCONNECTED_C) {
-                        DEBUG_PRINTF("\n[Temperature]Motor: Probe disconnected\n", NULL);
+                    if (systemData.temperatureSystem.temperature_motor == DEVICE_DISCONNECTED_C) {
+                        DEBUG_PRINTF("[Temperature]Motor: Probe disconnected\n", NULL);
                     } else {
                         DEBUG_PRINTF("[Temperature]Motor: %f\n", temperatures.temperature_motor); // [Temperature][last byte of probe address] = value is the format
                     }
-
-                    if (temperatures.temperature_mppt == DEVICE_DISCONNECTED_C) {
+                    if (systemData.temperatureSystem.temperature_battery == DEVICE_DISCONNECTED_C) {
+                        DEBUG_PRINTF("\n[Temperature]Battery: Probe disconnected\n", NULL);
+                    } else {
+                        DEBUG_PRINTF("[Temperature]Battery: %f\n", temperatures.temperature_battery); // [Temperature][last byte of probe address] = value is the format
+                    }                  
+                    if (systemData.temperatureSystem.temperature_mppt == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("[Temperature]MPPT: Probe disconnected\n", NULL);
                     } else {
                         DEBUG_PRINTF("[Temperature]MPPT: %f\n", temperatures.temperature_mppt);
@@ -406,19 +390,28 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     break;
                 }
                 case MAVLINK_MSG_ID_GPS_INFO: {
-                    Serial.printf("[RX]Received GPS info from channel %d\n", channel);
+                    DEBUG_PRINTF("[RX]Received GPS info from channel %d\n", channel);
                     mavlink_gps_info_t gps_info;
                     mavlink_msg_gps_info_decode(&message, &gps_info);
+                    systemData.gpsSystem = gps_info;
 
-                    SystemData::getInstance().gps.latitude = gps_info.latitude;
-                    SystemData::getInstance().gps.longitude = gps_info.longitude;
+                    DEBUG_PRINTF("[GPS]Latitude: %f\n", gps_info.latitude);
+                    DEBUG_PRINTF("[GPS]Longitude: %f\n", gps_info.longitude);
+                    break;
+                }
+                case MAVLINK_MSG_ID_AUX_SYSTEM: {
+                    DEBUG_PRINTF("[RX]Received aux system from channel %d\n", channel);
+                    mavlink_aux_system_t aux_system;
+                    mavlink_msg_aux_system_decode(&message, &aux_system);
+                    systemData.auxiliarySystem = aux_system;
 
-                    DEBUG_PRINTF("[RX]GPS latitude: %f\n", gps_info.latitude);
-                    DEBUG_PRINTF("[RX]GPS longitude: %f\n", gps_info.longitude);
+                    DEBUG_PRINTF("[AUX]Aux system voltage: %f\n", aux_system.voltage);
+                    DEBUG_PRINTF("[AUX]Aux system current: %f\n", aux_system.current);
+                    DEBUG_PRINTF("[AUX]Aux system pumps: %d\n", aux_system.pumps);
                     break;
                 }
                 default: {
-                    Serial.printf("[RX]Received message with ID #%d from channel %d\n", message.msgid, channel);
+                    DEBUG_PRINTF("[RX]Received message with ID #%d from channel %d\n", message.msgid, channel);
                     break;
                 }
             }
