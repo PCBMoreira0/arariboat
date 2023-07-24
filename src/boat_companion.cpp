@@ -581,10 +581,12 @@ void TemperatureReaderTask(void* parameter) {
     // You should then physically label the probes with tags or stripes as to differentiate them.
     DeviceAddress thermal_probe_zero = {0x28, 0x86, 0x1C, 0x07, 0xD6, 0x01, 0x3C, 0x8C};
     DeviceAddress thermal_probe_one = { 0 }; 
+    DeviceAddress thermal_probe_two = { 0 };
 
     while (true) {
         sensors.requestTemperatures(); // Send the command to update temperature readings
         float temperature_motor = sensors.getTempC(thermal_probe_zero);
+        float temperature_battery = -64.0f; // TODO: Implement battery temperature reading
         float temperature_mppt = sensors.getTempC(thermal_probe_one);
 
         #ifdef DEBUG_PRINTF
@@ -595,8 +597,14 @@ void TemperatureReaderTask(void* parameter) {
                 DEBUG_PRINTF("\n[Temperature][%x]Motor: %f\n", thermal_probe_zero[0], temperature_motor); // [Temperature][First byte of probe address] = value is the format
             }
 
+            if (temperature_battery == DEVICE_DISCONNECTED_C) {
+                DEBUG_PRINTF("\n[Temperature][%x]Battery: Device disconnected\n", thermal_probe_one[0]);
+            } else {
+                DEBUG_PRINTF("\n[Temperature][%x]Battery: %f\n", thermal_probe_one[0], temperature_battery);
+            }
+
             if (temperature_mppt == DEVICE_DISCONNECTED_C) {
-                DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[0]);
+                DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_two[0]);
             } else {
                 DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[0], temperature_mppt);
             }
@@ -607,15 +615,14 @@ void TemperatureReaderTask(void* parameter) {
         mavlink_message_t message;
         mavlink_temperatures_t temperatures = {
             .temperature_motor = temperature_motor,
-            .temperature_battery = 0.0f,
-            .temperature_mppt = temperature_mppt,
+            .temperature_battery = temperature_battery,
+            .temperature_mppt = temperature_mppt
         };
         mavlink_msg_temperatures_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &temperatures);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
 
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify the LED blinker task to blink the LED
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10000))) { // Wait for notification from serial reader task to scan for new probes
             DallasDeviceScanIndex(sensors); 
         }
@@ -657,6 +664,8 @@ void GpsReaderTask(void* parameter) {
     // Example of latitude: 40.741895 (north is positive)
     // Example of longitude: -73.989308 (west is negative)
     // The fifth decimal place is worth up to 1.1 m. The sixth decimal place is worth up to 11cm. And so forth.
+    systemData.gpsSystem.latitude = -22.9085185092264; // Initialize with a default value 
+    systemData.gpsSystem.longitude = -43.1723022460938; // Initialize with a default value
     
     // Three hardware serial ports are available on the ESP32 with configurable GPIOs.
     // Serial0 is used for debugging and is connected to the USB-to-serial converter. Therefore, Serial1 and Serial2 are available.
@@ -665,56 +674,48 @@ void GpsReaderTask(void* parameter) {
     constexpr uint8_t gps_rx_pin = 16;  
     constexpr uint8_t gps_tx_pin = 17; 
     constexpr int32_t baud_rate = 9600; // Fixed baud rate used by NEO-6M GPS module
+    static uint32_t mavlink_timer = 0; // Timer used to send mavlink messages at a fixed rate
     Serial2.begin(baud_rate, SERIAL_8N1, gps_rx_pin, gps_tx_pin); // Initialize Serial2 with the chosen baud rate and pins
-   
+
     while (true) {
         while (Serial2.available()) {
             // Reads the serial stream from the NEO-6M GPS module and parses it into TinyGPSPlus object if a valid NMEA sentence is received
             if (gps.encode(Serial2.read())) { 
-                constexpr float invalid_value = -1.0f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
-                float latitude = invalid_value;
-                float longitude = invalid_value;
-                float speed = invalid_value;
-                float course = invalid_value;
-                uint8_t satellites = 0;
 
                 if (gps.location.isValid()) {
-                    latitude = gps.location.lat();
-                    longitude = gps.location.lng();
+                    systemData.gpsSystem.latitude = gps.location.lat();
+                    systemData.gpsSystem.longitude = gps.location.lng();
                     //DEBUG_PRINTF("[GPS]Latitude: %f, Longitude: %f\n", latitude, longitude);
                 }
                 if (gps.speed.isValid()) {
-                    speed = gps.speed.kmph();
+                    systemData.gpsSystem.speed = gps.speed.kmph();
                     //DEBUG_PRINTF("[GPS]Speed: %f\n", speed);
                 }
                 if (gps.course.isValid()) {
-                    course = gps.course.deg();
+                    systemData.gpsSystem.course = gps.course.deg();
                     //DEBUG_PRINTF("[GPS]Course: %f\n", course);
                 }
+
                 if (gps.satellites.isValid()) {
-                    satellites = gps.satellites.value();
-                    if (!satellites) break; // If no satellites are visible, the gps data is invalid. Break from the function.
+                    systemData.gpsSystem.satellites_visible = gps.satellites.value();
                     //DEBUG_PRINTF("[GPS]Satellites: %d\n", satellites);
                 }
 
-                // Prepare and send mavlink message by encoding the payload into a struct, then encoding the struct into a mavlink message below.
-                mavlink_message_t message;
-                mavlink_gps_info_t gps_info = {
-                    latitude,
-                    longitude,
-                    speed,
-                    course,
-                    satellites
-                };
-                    
-                mavlink_msg_gps_info_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &gps_info);
-                uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-                uint16_t length = mavlink_msg_to_send_buffer(buffer, &message);
-                Serial.write(buffer, length);
-                xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); 
+                break;
             }
+        }
+
+        if (millis() - mavlink_timer > 7000) {
+            mavlink_timer = millis();
+            // Prepare and send mavlink message by encoding the payload into a struct, then encoding the struct into a mavlink message below.
+            mavlink_message_t message;
+            mavlink_msg_gps_info_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &systemData.gpsSystem);
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t length = mavlink_msg_to_send_buffer(buffer, &message);
+            Serial.write(buffer, length);
+            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify the LED blinker task that a message is being sent
         }           
-        vTaskDelay(pdMS_TO_TICKS(6000));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -805,10 +806,10 @@ void InstrumentationReaderTask(void* parameter) {
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
             DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
                             "[Instrumentation]Battery: %fV\n"
-                            "[Instrumentation]Calibrated battery: %fV\n"
-                            "[Instrumentation]Motor current: %fV\n"
-                            "[Instrumentation]Battery current: %fV\n"
-                            "[Instrumentation]MPPT current: %fV\n",
+                            "[Instrumentation]Calibrated battery: %fA\n"
+                            "[Instrumentation]Motor current: %fA\n"
+                            "[Instrumentation]Battery current: %fA\n"
+                            "[Instrumentation]MPPT current: %fA\n",
             voltage_primary_resistor_drop, battery_voltage, calibrated_battery_voltage, motor_current, battery_current, current_mppt);
         }
 
@@ -819,12 +820,7 @@ void InstrumentationReaderTask(void* parameter) {
 
         // Prepare and send Mavlink message
         mavlink_message_t message;
-        mavlink_instrumentation_t instrumentation = {
-            .battery_voltage = calibrated_battery_voltage,
-            .motor_current = motor_current,
-            .battery_current = battery_current,
-            .mppt_current = current_mppt
-        };
+        mavlink_instrumentation_t instrumentation = systemData.instrumentationSystem;
         
         mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
@@ -896,7 +892,7 @@ float LinearCorrection(const float input_value, const float slope, const float i
     return slope * input_value + intercept;
 }
 
-void EncoderControl(void* parameter) {
+void EncoderControlTask(void* parameter) {
     
     constexpr uint8_t dac_pin = 25;
     constexpr uint8_t power_pin = 27;
@@ -913,7 +909,9 @@ void EncoderControl(void* parameter) {
     constexpr int16_t max_dac_amplified_output_voltage = 5000; // mV
     
     static uint32_t print_timer = 0;
-    static uint32_t can_print_timer = 0;;
+    static uint32_t can_print_timer = 0;
+    uint32_t mavlink_timer = 0;
+    uint32_t mavlink_timer_interval = 6000;
     static bool can_print = false;
     encoder.readAndReset(); // Reset encoder position to zero.
   
@@ -926,22 +924,40 @@ void EncoderControl(void* parameter) {
             can_print = true;
             uint8_t discrete_output = currentPosition * dac_resolution / max_number_steps;
             dacWrite(dac_pin, discrete_output);
-            systemData.controlSystem.dac_output = (float)discrete_output * max_dac_amplified_output_voltage / dac_resolution;
+
+            int32_t output_voltage = currentPosition * max_dac_output_voltage / max_number_steps;
+            systemData.controlSystem.dac_output = (float)output_voltage;
         }
 
         if ((millis() - can_print_timer > 2000) && can_print) {
+            // If the encoder has not been moved for 2 seconds, stop printing to the serial port.
             can_print_timer = millis();
             can_print = false;
         }
 
         if ((millis() - print_timer > 500) && can_print) {
+            // Print the encoder position to the serial port every 500ms if the encoder has been moved until after 2 seconds of inactivity.
             print_timer = millis();
-            Serial.printf("\n[DAC]Encoder position: %d%%\n", currentPosition * 100 / max_number_steps);
-            Serial.printf("[DAC] output: %d mV\n", currentPosition * max_dac_output_voltage / max_number_steps);
-            Serial.printf("[DAC] amplified output: %d mV\n", currentPosition * max_dac_amplified_output_voltage / max_number_steps);
+            DEBUG_PRINTF("\n[DAC]Encoder position: %d%%\n", currentPosition * 100 / max_number_steps); // Print encoder position as a percentage.
+            DEBUG_PRINTF("[DAC]Output: %d mV\n", currentPosition * max_dac_output_voltage / max_number_steps); // Print the output voltage of the DAC.
+            DEBUG_PRINTF("[DAC]Amplified output: %d mV\n", currentPosition * max_dac_amplified_output_voltage / max_number_steps); // Print the amplified output voltage of the DAC.
         }
 
-        vTaskDelay(5);
+        if (millis() - mavlink_timer > mavlink_timer_interval) {
+            // Send mavlink message every interval
+            mavlink_timer = millis();
+            DEBUG_PRINTF("\n[DAC]Amplified output: %f mV\n", systemData.controlSystem.dac_output);
+
+            mavlink_message_t message;
+            mavlink_control_system_t control_system = systemData.controlSystem;
+
+            mavlink_msg_control_system_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &control_system);
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+            Serial.write(buffer, len);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -969,8 +985,8 @@ void AuxiliaryReaderTask(void* parameter) {
     pinMode(starboard_pump_pin, INPUT);
     pinMode(battery_current_pin, INPUT);
 
-    float battery_voltage = 0.0f;
-    float battery_current = 0.0f;
+    float aux_battery_voltage = 0.0f;
+    float aux_battery_current = 0.0f;
     bool port_pump_voltage = 0.0f;
     bool starboard_pump_voltage = 0.0f;
 
@@ -1053,10 +1069,10 @@ void AuxiliaryReaderTask(void* parameter) {
 
     while (true) {
         float battery_voltage_reading = (analogRead(battery_voltage_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
-        battery_voltage = (battery_voltage_reading + battery_voltage * number_samples_filter) / (number_samples_filter + 1);
+        aux_battery_voltage = (battery_voltage_reading + aux_battery_voltage * number_samples_filter) / (number_samples_filter + 1);
 
         float battery_current_reading = ReadBatteryCurrent(battery_current_pin, offset_adc_reference, sensitivity_adc);
-        battery_current = (battery_current_reading + battery_current * number_samples_filter) / (number_samples_filter + 1);
+        aux_battery_current = (battery_current_reading + aux_battery_current * number_samples_filter) / (number_samples_filter + 1);
 
         float port_pump_voltage_reading = (analogRead(port_pump_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
         port_pump_voltage = (port_pump_voltage_reading + port_pump_voltage * number_samples_filter) / (number_samples_filter + 1);
@@ -1067,24 +1083,34 @@ void AuxiliaryReaderTask(void* parameter) {
         bool is_port_pump_on = port_pump_voltage_reading > pump_threshold_voltage;
         bool is_starboard_pump_on = starboard_pump_voltage_reading > pump_threshold_voltage;
 
+        systemData.auxiliarySystem.voltage = aux_battery_voltage;
+        systemData.auxiliarySystem.current = aux_battery_current;
         systemData.auxiliarySystem.pumps = (is_port_pump_on << 1) | is_starboard_pump_on;
 
         static uint32_t print_timer = 0;
-        if (millis() - print_timer > 3000) {
+        if (millis() - print_timer > 8000) {
             print_timer = millis();
             if (systemData.debug_print & SystemData::debug_print_flags::Auxiliary) {
-                DEBUG_PRINTF("\n[AUX]Battery voltage: %.2fV\n", battery_voltage);
-                DEBUG_PRINTF("[AUX]Battery current: %.2fA\n", battery_current);
+                DEBUG_PRINTF("\n[AUX]Battery voltage: %.2fV\n", aux_battery_voltage);
+                DEBUG_PRINTF("[AUX]Battery current: %.2fA\n", aux_battery_current);
                 DEBUG_PRINTF("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
                 DEBUG_PRINTF("[AUX]Starboard pump: %s\n", is_starboard_pump_on ? "ON" : "OFF");
             }
+
+            // Prepare and send mavlink message
+            mavlink_message_t message;
+            mavlink_aux_system_t aux_system = systemData.auxiliarySystem;
+
+            mavlink_msg_aux_system_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &aux_system);
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
+            Serial.write(buffer, len);
         }
 
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100))) {
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(500))) {
             asked_to_calibrate = true;
             CalibrateCurrentSensor(battery_current_pin, offset_adc_reference, sensitivity_adc, asked_to_calibrate);
-            //DEBUG_PRINTF("Passed calibration at line %d\n", __LINE__);
-            //xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
         }
     }
 }
@@ -1111,14 +1137,14 @@ void setup() {\
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
-    xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 3, &vpnConnectionTaskHandle);
+    xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
     xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
-    xTaskCreate(EncoderControl, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
+    xTaskCreate(EncoderControlTask, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
