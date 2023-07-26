@@ -274,7 +274,7 @@ void ServerTask(void* parameter) {
         request->send(200, "application/json", output);
     });
 
-    server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/instrumentation-system", HTTP_GET, [](AsyncWebServerRequest *request) {
         
         // Send system instrumentation data
         float battery_voltage = systemData.instrumentationSystem.battery_voltage;
@@ -296,7 +296,7 @@ void ServerTask(void* parameter) {
     });
 
     // temperatures
-    server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/temperature-system", HTTP_GET, [](AsyncWebServerRequest *request) {
         
         // Send temperature data from singleton class
         float temperature_motor = systemData.temperatureSystem.temperature_motor;
@@ -315,7 +315,7 @@ void ServerTask(void* parameter) {
         request->send(200, "application/json", output);
     });
     
-    server.on("/gps", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/gps-system", HTTP_GET, [](AsyncWebServerRequest *request) {
         
         // Send GPS data from singleton class
         float latitude = systemData.gpsSystem.latitude;
@@ -341,13 +341,13 @@ void ServerTask(void* parameter) {
 
     server.on("/auxiliary-system", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Send control system data from singleton class
-        uint8_t pump_mask = systemData.auxiliarySystem.pumps;
+        uint8_t pumps = systemData.auxiliarySystem.pumps;
         float aux_current = systemData.auxiliarySystem.current;
         float aux_voltage = systemData.auxiliarySystem.voltage;
         
         constexpr uint16_t doc_size = 128;
         StaticJsonDocument<doc_size> doc;
-        doc["pump_mask"] = pump_mask;
+        doc["pumps"] = pumps;
         doc["aux_current"] = aux_current;
         doc["aux_voltage"] = aux_voltage;
 
