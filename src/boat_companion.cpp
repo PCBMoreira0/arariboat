@@ -586,6 +586,8 @@ void TemperatureReaderTask(void* parameter) {
     DeviceAddress thermal_probe_one = { 0x28, 0x02, 0x45, 0x49, 0xF6, 0x32, 0x3C, 0xC5 }; 
     DeviceAddress thermal_probe_two = { 0x28, 0xCF, 0x67, 0x49, 0xF6, 0x4D, 0x3C, 0xC5 };
 
+    systemData.temperatureSystem = { DEVICE_DISCONNECTED_C }; // Initialize the temperature system data to DEVICE_DISCONNECTED_C, which is -127.0f
+
     while (true) {
         // Increase task priority
         vTaskPrioritySet(NULL, 5);
@@ -601,29 +603,28 @@ void TemperatureReaderTask(void* parameter) {
                 DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
             } else {
                 DEBUG_PRINTF("\n[Temperature][%x]Motor: %f\n", thermal_probe_zero[0], temperature_motor); // [Temperature][First byte of probe address] = value is the format
+                systemData.temperatureSystem.temperature_motor = temperature_motor;
             }
 
             if (temperature_battery == DEVICE_DISCONNECTED_C) {
                 DEBUG_PRINTF("\n[Temperature][%x]Battery: Device disconnected\n", thermal_probe_one[0]);
             } else {
                 DEBUG_PRINTF("\n[Temperature][%x]Battery: %f\n", thermal_probe_one[0], temperature_battery);
+                systemData.temperatureSystem.temperature_battery = temperature_battery;
             }
 
             if (temperature_mppt == DEVICE_DISCONNECTED_C) {
                 DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_two[0]);
             } else {
                 DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[0], temperature_mppt);
+                systemData.temperatureSystem.temperature_mppt = temperature_mppt;
             }
         }
         #endif
 
         // Prepare and send a mavlink message
         mavlink_message_t message;
-        mavlink_temperatures_t temperatures = {
-            .temperature_motor = temperature_motor,
-            .temperature_battery = temperature_battery,
-            .temperature_mppt = temperature_mppt
-        };
+        mavlink_temperatures_t temperatures = systemData.temperatureSystem;
         mavlink_msg_temperatures_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &temperatures);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
