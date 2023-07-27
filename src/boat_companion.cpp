@@ -575,19 +575,25 @@ void TemperatureReaderTask(void* parameter) {
     pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH); // Set power pin to HIGH to power the temperature probes
     OneWire one_wire(temperature_bus_pin); // Setup a one_wire instance to communicate with any devices that use the OneWire protocol
     DallasTemperature sensors(&one_wire); // Pass our one_wire reference to Dallas Temperature sensor, which uses the OneWire protocol.
+    sensors.begin(); // Scan for devices on the OneWire bus.
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Wait for the probes to power up and initialize
     
     // Each probe has a unique 8-byte address. Use the scanIndex method to initially find the addresses of the probes. 
     // Then hardcode the addresses into the program. This is done to avoid the overhead of scanning for the addresses every time the function is called.
     // You should then physically label the probes with tags or stripes as to differentiate them.
-    DeviceAddress thermal_probe_zero = {0x28, 0x86, 0x1C, 0x07, 0xD6, 0x01, 0x3C, 0x8C};
-    DeviceAddress thermal_probe_one = { 0 }; 
-    DeviceAddress thermal_probe_two = { 0 };
+
+    DeviceAddress thermal_probe_zero = { 0x28, 0x1A, 0xCE, 0x49, 0xF6, 0x05, 0x3C, 0xC7};
+    DeviceAddress thermal_probe_one = { 0x28, 0x02, 0x45, 0x49, 0xF6, 0x32, 0x3C, 0xC5 }; 
+    DeviceAddress thermal_probe_two = { 0x28, 0xCF, 0x67, 0x49, 0xF6, 0x4D, 0x3C, 0xC5 };
 
     while (true) {
+        // Increase task priority
+        vTaskPrioritySet(NULL, 5);
         sensors.requestTemperatures(); // Send the command to update temperature readings
+        vTaskPrioritySet(NULL, 1);
         float temperature_motor = sensors.getTempC(thermal_probe_zero);
-        float temperature_battery = -64.0f; // TODO: Implement battery temperature reading
-        float temperature_mppt = sensors.getTempC(thermal_probe_one);
+        float temperature_battery = sensors.getTempC(thermal_probe_one);
+        float temperature_mppt = sensors.getTempC(thermal_probe_two);
 
         #ifdef DEBUG_PRINTF
         if (systemData.debug_print & SystemData::debug_print_flags::Temperature) {
@@ -646,7 +652,9 @@ void PrintProbeAddress(DeviceAddress device_address) {
 /// for faster performance.
 /// @param sensors 
 void DallasDeviceScanIndex(DallasTemperature &sensors) {
+    vTaskPrioritySet(NULL, 5);
     sensors.begin(); // Scan for devices on the OneWire bus.
+    vTaskPrioritySet(NULL, 1);
     Serial.printf("\nFound %d devices\n", sensors.getDeviceCount());
     for (uint8_t i = 0; i < sensors.getDeviceCount(); i++) {
         DeviceAddress device_address;
