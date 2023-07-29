@@ -600,23 +600,23 @@ void TemperatureReaderTask(void* parameter) {
         #ifdef DEBUG_PRINTF
         if (systemData.debug_print & SystemData::debug_print_flags::Temperature) {
             if (temperature_motor == DEVICE_DISCONNECTED_C) {
-                DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
+                DEBUG_PRINTF("\n[Temperature]Motor: Device disconnected\n", NULL);
             } else {
-                DEBUG_PRINTF("\n[Temperature][%x]Motor: %f\n", thermal_probe_zero[0], temperature_motor); // [Temperature][First byte of probe address] = value is the format
+                DEBUG_PRINTF("\n[Temperature]Motor: %.2f°C\n", temperature_motor); // [Temperature][First byte of probe address] = value is the format
                 systemData.temperatureSystem.temperature_motor = temperature_motor;
             }
 
             if (temperature_battery == DEVICE_DISCONNECTED_C) {
-                DEBUG_PRINTF("\n[Temperature][%x]Battery: Device disconnected\n", thermal_probe_one[0]);
+                DEBUG_PRINTF("\n[Temperature]Battery: Device disconnected\n", NULL);
             } else {
-                DEBUG_PRINTF("\n[Temperature][%x]Battery: %f\n", thermal_probe_one[0], temperature_battery);
+                DEBUG_PRINTF("\n[Temperature]Battery: %.2f°C\n", temperature_battery);
                 systemData.temperatureSystem.temperature_battery = temperature_battery;
             }
 
             if (temperature_mppt == DEVICE_DISCONNECTED_C) {
-                DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_two[0]);
+                DEBUG_PRINTF("\n[Temperature]MPPT: Device disconnected\n", NULL);
             } else {
-                DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[0], temperature_mppt);
+                DEBUG_PRINTF("\n[Temperature]MPPT: %.2f°C\n", temperature_mppt);
                 systemData.temperatureSystem.temperature_mppt = temperature_mppt;
             }
         }
@@ -797,15 +797,15 @@ void InstrumentationReaderTask(void* parameter) {
         // As we are using the 4 analog inputs for each of the 4 sensors, single ended measurements are being used in order to access all 4 sensors.
         // When using single ended mode, the maximum output code is 0x7FFF(32767), which corresponds to the full-scale input voltage.
 
-        float battery_voltage_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
+        float battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
         float motor_current_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
         float current_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
         float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
-        //DEBUG_PRINTF("\n[Instrumentation-PIN-VOLTAGE]Battery voltage: %f, Motor voltage: %f, Battery voltage: %f, MPPT voltage: %f\n", battery_voltage_pin_voltage, motor_current_pin_voltage, current_battery_pin_voltage, current_mppt_pin_voltage);
+        //DEBUG_PRINTF("\n[Instrumentation-PIN-VOLTAGE]Battery voltage: %f, Motor voltage: %f, Battery voltage: %f, MPPT voltage: %f\n", battery_pin_voltage, motor_current_pin_voltage, current_battery_pin_voltage, current_mppt_pin_voltage);
 
         // Calibrate the voltage by comparing the value of voltage_primary_resistor_drop variable against the actual voltage drop on the primary resistor using a multimeter. 
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
-        float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_voltage_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
+        float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
         float calibrated_battery_voltage = LinearCorrection(battery_voltage, 1.0025059f, 0.0f);
         
@@ -813,12 +813,12 @@ void InstrumentationReaderTask(void* parameter) {
         float battery_current = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
         float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance);
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
-            DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
-                            "[Instrumentation]Battery: %fV\n"
-                            "[Instrumentation]Calibrated battery: %fA\n"
-                            "[Instrumentation]Motor current: %fA\n"
-                            "[Instrumentation]Battery current: %fA\n"
-                            "[Instrumentation]MPPT current: %fA\n",
+            DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %.2fV\n"
+                            "[Instrumentation]Battery: %.2fV\n"
+                            "[Instrumentation]Calibrated battery: %.2fA\n"
+                            "[Instrumentation]Motor current: %.2fA\n"
+                            "[Instrumentation]Battery current: %.2fA\n"
+                            "[Instrumentation]MPPT current: %.2fA\n",
             voltage_primary_resistor_drop, battery_voltage, calibrated_battery_voltage, motor_current, battery_current, current_mppt);
         }
 
@@ -885,6 +885,7 @@ float CalculateCurrentT201(const float pin_voltage, const float selected_full_sc
     // Calculates the slope and intercept of the linear equation that relates input current to output voltage.
     const float zero_input_voltage = 4.0f * burden_resistance * 0.001f; // 4mA * burden resistor
     const float full_input_voltage = 20.0f * burden_resistance * 0.001f; // 20mA * burden resistor
+    if (pin_voltage < zero_input_voltage) return 0.0f; // If the voltage is below the minimum value, return 0.0f (no current)
     const float zero_input_current = 0.0f;
     const float full_input_current = selected_full_scale_range;
     const float slope = (full_input_current - zero_input_current) / (full_input_voltage - zero_input_voltage);
@@ -955,7 +956,7 @@ void EncoderControlTask(void* parameter) {
         if (millis() - mavlink_timer > mavlink_timer_interval) {
             // Send mavlink message every interval
             mavlink_timer = millis();
-            DEBUG_PRINTF("\n[DAC]Amplified output: %f mV\n", systemData.controlSystem.dac_output);
+            DEBUG_PRINTF("\n[DAC]Amplified output: %.2f mV\n", systemData.controlSystem.dac_output);
 
             mavlink_message_t message;
             mavlink_control_system_t control_system = systemData.controlSystem;
