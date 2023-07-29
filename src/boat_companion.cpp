@@ -569,10 +569,10 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 void DallasDeviceScanIndex(DallasTemperature& sensors);
 void TemperatureReaderTask(void* parameter) {
 
-    constexpr uint8_t power_pin = 2; // GPIO used to power the temperature probes
+    //constexpr uint8_t power_pin = 2; // GPIO used to power the temperature probes if testing on the bench
     constexpr uint8_t temperature_bus_pin = 15; // GPIO used for OneWire communication
     
-    pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH); // Set power pin to HIGH to power the temperature probes
+    //pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH); // Set power pin to HIGH to power the temperature probes if testing on the bench
     OneWire one_wire(temperature_bus_pin); // Setup a one_wire instance to communicate with any devices that use the OneWire protocol
     DallasTemperature sensors(&one_wire); // Pass our one_wire reference to Dallas Temperature sensor, which uses the OneWire protocol.
     sensors.begin(); // Scan for devices on the OneWire bus.
@@ -811,7 +811,7 @@ void InstrumentationReaderTask(void* parameter) {
         
         float motor_current = CalculateCurrentT201(motor_current_pin_voltage, selected_full_scale_range, motor_burden_resistance);
         float battery_current = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
-        float current_mppt = CalculateCurrentLA55(current_mppt_pin_voltage, current_conversion_ratio, mppt_burden_resistance);
+        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance);
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
             DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
                             "[Instrumentation]Battery: %fV\n"
@@ -1078,6 +1078,7 @@ void AuxiliaryReaderTask(void* parameter) {
 
     while (true) {
         float battery_voltage_reading = (analogRead(battery_voltage_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
+        battery_voltage_reading = LinearCorrection(battery_voltage_reading, 1.3009f, -2.5583f); // Calibrate voltage reading by using a linear equation obtained by comparing the readings with a multimeter.
         aux_battery_voltage = (battery_voltage_reading + aux_battery_voltage * number_samples_filter) / (number_samples_filter + 1);
 
         float battery_current_reading = ReadBatteryCurrent(battery_current_pin, offset_adc_reference, sensitivity_adc);
