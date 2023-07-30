@@ -5,13 +5,27 @@
 
 //#define TFT_INVERSION_OFF
 
-#define TFT_MISO 13 // or 19 (leave TFT SDO disconnected if other SPI devices share MISO)
-#define TFT_MOSI 12 // or 23
-#define TFT_SCLK 14 // or 21
+//VIN PIN (1)
+//GND PIN(2)
 #define TFT_CS   15   // Chip select control pin
-#define TFT_DC   2    // Data Command control pin
 #define TFT_RST  4    // Reset pin (could connect to RST pin)
+#define TFT_DC   2    // Data Command control pin
+#define TFT_MOSI 16 // or 23
+#define TFT_SCLK 17 // or 21
+// LED PIN CONNECTED TO VIN
+#define TFT_MISO 5 // or 19 (leave TFT SDO disconnected if other SPI devices share MISO)
 
+/*
+//VIN PIN
+//GND PIN
+#define TFT_CS   15   // Chip select control pin
+#define TFT_RST  4    // Reset pin (could connect to RST pin)
+#define TFT_DC   2    // Data Command control pin
+#define TFT_MOSI 17 // or 23
+#define TFT_SCLK 5 // or 21
+// LED PIN CONNECTED TO VIN
+#define TFT_MISO 16 // or 19 (leave TFT SDO disconnected if other SPI devices share MISO)
+*/
 
 #define LOAD_GLCD   // Font 1. Original Adafruit 8 pixel font needs ~1820 bytes in FLASH
 #define LOAD_FONT2  // Font 2. Small 16 pixel high font, needs ~3534 bytes in FLASH, 96 characters
