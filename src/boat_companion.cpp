@@ -92,7 +92,7 @@ void LedBlinkerTask(void* parameter) {
         bool buzzerState = pattern[patternPosition] != 0;
 
         if (blink_rate == BlinkRate::Fast) {
-            dacWrite(buzzer_pin, buzzerState ? 150 : 0);
+            dacWrite(buzzer_pin, buzzerState ? 50 : 0);
         } else {
             dacWrite(buzzer_pin, 0);
         }
@@ -673,9 +673,9 @@ void GpsReaderTask(void* parameter) {
     // Example of latitude: 40.741895 (north is positive)
     // Example of longitude: -73.989308 (west is negative)
     // The fifth decimal place is worth up to 1.1 m. The sixth decimal place is worth up to 11cm. And so forth.
-    systemData.gpsSystem.latitude = -22.9085185092264; // Initialize with a default value 
-    systemData.gpsSystem.longitude = -43.1723022460938; // Initialize with a default value
-    
+    systemData.gpsSystem.latitude = -22.908999802867775; // Initialize with a default value 
+    systemData.gpsSystem.longitude = -43.11588682984723; // Initialize with a default value
+
     // Three hardware serial ports are available on the ESP32 with configurable GPIOs.
     // Serial0 is used for debugging and is connected to the USB-to-serial converter. Therefore, Serial1 and Serial2 are available.
     
@@ -780,8 +780,8 @@ void InstrumentationReaderTask(void* parameter) {
     while (true) {
         // Check and confirm which values of resistors are being used on the board.
         // Values associated with the voltage sensor.
-        constexpr float voltage_conversion_ratio = 2.59081f; // Datasheet gives a reference value of 2.50, but here it is being used an iterative process to find a value that satisfies the conversion measurements.
-        constexpr int32_t voltage_primary_resistance = 4700; // Resistor connected to primary side of LV-20P voltage sensor.
+        constexpr float voltage_conversion_ratio = 2.50f; // Datasheet gives a reference value of 2.50, but here it is being used an iterative process to find a value that satisfies the conversion measurements.
+        constexpr int32_t voltage_primary_resistance = 5000; // Equivalent resistance connected to primary side of LV-20P voltage sensor / 2 parallel resistors of 10k each.
         constexpr int32_t voltage_primary_coil_resistance = 250; // Resistance of the primary coil of the LV-20P voltage sensor.
         constexpr float primary_voltage_divider_ratio  = (float)voltage_primary_coil_resistance / voltage_primary_resistance;
         constexpr int32_t voltage_burden_resistance = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
@@ -807,19 +807,29 @@ void InstrumentationReaderTask(void* parameter) {
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
         float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
-        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 1.0025059f, 0.0f);
+        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.1511f);
         
         float motor_current = CalculateCurrentT201(motor_current_pin_voltage, selected_full_scale_range, motor_burden_resistance);
         float battery_current = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
         float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance);
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
-            DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %.2fV\n"
+
+           // Use this to calibrate the voltage sensor 
+            //DEBUG_PRINTF(    "\n"
+            //                "[Instrumentation]Primary resistor voltage drop: %.2fV\n"
+            //                "[Instrumentation]Battery: %.2fV\n"
+            //                "[Instrumentation]Calibrated battery: %.2fV\n"
+            //                "[Instrumentation]Motor current: %.2fA\n"
+            //                "[Instrumentation]Battery current: %.2fA\n"
+            //                "[Instrumentation]MPPT current: %.2fA\n",
+            //voltage_primary_resistor_drop, battery_voltage, calibrated_battery_voltage, motor_current, battery_current, current_mppt);
+
+            DEBUG_PRINTF(    "\n"
                             "[Instrumentation]Battery: %.2fV\n"
-                            "[Instrumentation]Calibrated battery: %.2fA\n"
                             "[Instrumentation]Motor current: %.2fA\n"
                             "[Instrumentation]Battery current: %.2fA\n"
                             "[Instrumentation]MPPT current: %.2fA\n",
-            voltage_primary_resistor_drop, battery_voltage, calibrated_battery_voltage, motor_current, battery_current, current_mppt);
+           calibrated_battery_voltage, motor_current, battery_current, current_mppt);
         }
 
         systemData.instrumentationSystem.battery_voltage = calibrated_battery_voltage;
@@ -905,12 +915,10 @@ float LinearCorrection(const float input_value, const float slope, const float i
 void EncoderControlTask(void* parameter) {
     
     constexpr uint8_t dac_pin = 25;
-    constexpr uint8_t power_pin = 27;
     constexpr uint8_t dataPin = 14;
     constexpr uint8_t clockPin = 12;
 
     Encoder encoder(clockPin, dataPin);
-    pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH);
  
     static int32_t previousPosition = 0;
     constexpr uint8_t dac_resolution = 255; // 8-bit DAC
@@ -1011,7 +1019,7 @@ void AuxiliaryReaderTask(void* parameter) {
         return measured_current;
     };
 
-    auto CalibrateCurrentSensor = [](uint8_t pin, float& offset_adc_reference, float& sensitivity_adc, bool& asked_to_calibrate) {
+    auto CalibrateCurrentSensor = [](uint8_t pin, float& adc_zero_current_intercept, float& sensitivity_adc_slope, bool& asked_to_calibrate) {
         // By using non volatile memory, first obtain the calibration factor from the memory. If it is not set, then calibrate the sensor and save the calibration factor to the memory.;
         // If the calibration factor is not set, then 50 readings are taken and averaged to obtain the average offset voltage when no current is flowing through the sensor.
         // Then the user is asked to input the current flowing through the sensor for a new set of 50 readings to obtain the average sensitivity of the sensor.
@@ -1019,10 +1027,10 @@ void AuxiliaryReaderTask(void* parameter) {
         Preferences preferences;
         preferences.begin("aux", false);
         constexpr float error_value = -1.0f;
-        offset_adc_reference = preferences.getFloat("offset", error_value); 
-        sensitivity_adc = preferences.getFloat("sensitivity", error_value); 
+        adc_zero_current_intercept = preferences.getFloat("offset", error_value); 
+        sensitivity_adc_slope = preferences.getFloat("sensitivity", error_value); 
 
-        if ((offset_adc_reference < 0.0f || sensitivity_adc < 0.0f) || asked_to_calibrate) {
+        if ((adc_zero_current_intercept == error_value || sensitivity_adc_slope == error_value) || asked_to_calibrate) {
 
             auto previous_print_state = systemData.debug_print;
             systemData.debug_print = systemData.debug_print_flags::Auxiliary;
@@ -1041,8 +1049,8 @@ void AuxiliaryReaderTask(void* parameter) {
                 offset_adc_sum += analogRead(pin);
                 vTaskDelay(pdMS_TO_TICKS(sample_interval));
             }
-            offset_adc_reference = offset_adc_sum / number_samples;
-            Serial.printf("\n[AUX]Offset adc: %.2f\n", offset_adc_reference);
+            adc_zero_current_intercept = offset_adc_sum / number_samples;
+            Serial.printf("\n[AUX]Offset adc: %.2f\n", adc_zero_current_intercept);
             Serial.printf("\n[AUX]Turn on the current source and input it starting with a 'C'");
             
             uint32_t notification_value;
@@ -1059,30 +1067,30 @@ void AuxiliaryReaderTask(void* parameter) {
                 vTaskDelay(pdMS_TO_TICKS(sample_interval));
             }
             measured_adc = measured_adc / number_samples;
-            sensitivity_adc = current / (measured_adc - offset_adc_reference);
-            Serial.printf("\n[AUX]Offset adc: %.2f\n", offset_adc_reference);
+            sensitivity_adc_slope = current / (measured_adc - adc_zero_current_intercept);
+            Serial.printf("\n[AUX]Offset adc: %.2f\n", adc_zero_current_intercept);
             Serial.printf("[AUX]Measured adc: %.2f\n", measured_adc);
-            Serial.printf("[AUX]Sensitivity adc: %.2f\n", sensitivity_adc);
-            preferences.putFloat("offset", offset_adc_reference);
-            preferences.putFloat("sensitivity", sensitivity_adc);
-            preferences.end(); 
+            Serial.printf("[AUX]Sensitivity adc: %.2f\n", sensitivity_adc_slope);
+            preferences.putFloat("offset", adc_zero_current_intercept);
+            preferences.putFloat("sensitivity", sensitivity_adc_slope);    
             systemData.debug_print = previous_print_state;
             xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
         }
+            preferences.end();
     };
 
     static bool asked_to_calibrate = false;
     constexpr float error_value = -1.0f;
-    float offset_adc_reference = error_value;
-    float sensitivity_adc = error_value;
-    CalibrateCurrentSensor(battery_current_pin, offset_adc_reference, sensitivity_adc, asked_to_calibrate);
+    float adc_zero_current_intercept = error_value;
+    float sensitivity_adc_slope = error_value;
+    CalibrateCurrentSensor(battery_current_pin, adc_zero_current_intercept, sensitivity_adc_slope, asked_to_calibrate);
 
     while (true) {
         float battery_voltage_reading = (analogRead(battery_voltage_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
         battery_voltage_reading = LinearCorrection(battery_voltage_reading, 1.3009f, -2.5583f); // Calibrate voltage reading by using a linear equation obtained by comparing the readings with a multimeter.
         aux_battery_voltage = (battery_voltage_reading + aux_battery_voltage * number_samples_filter) / (number_samples_filter + 1);
 
-        float battery_current_reading = ReadBatteryCurrent(battery_current_pin, offset_adc_reference, sensitivity_adc);
+        float battery_current_reading = ReadBatteryCurrent(battery_current_pin, adc_zero_current_intercept, sensitivity_adc_slope);
         aux_battery_current = (battery_current_reading + aux_battery_current * number_samples_filter) / (number_samples_filter + 1);
 
         float port_pump_voltage_reading = (analogRead(port_pump_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
@@ -1121,7 +1129,7 @@ void AuxiliaryReaderTask(void* parameter) {
 
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(500))) {
             asked_to_calibrate = true;
-            CalibrateCurrentSensor(battery_current_pin, offset_adc_reference, sensitivity_adc, asked_to_calibrate);
+            CalibrateCurrentSensor(battery_current_pin, adc_zero_current_intercept, sensitivity_adc_slope, asked_to_calibrate);
         }
     }
 }
@@ -1155,7 +1163,7 @@ void setup() {\
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
     xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
-    xTaskCreate(EncoderControlTask, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
+    //xTaskCreate(EncoderControlTask, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
