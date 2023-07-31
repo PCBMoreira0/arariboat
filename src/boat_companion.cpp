@@ -582,8 +582,8 @@ void TemperatureReaderTask(void* parameter) {
     // Then hardcode the addresses into the program. This is done to avoid the overhead of scanning for the addresses every time the function is called.
     // You should then physically label the probes with tags or stripes as to differentiate them.
 
-    DeviceAddress thermal_probe_zero = { 0x28, 0x1A, 0xCE, 0x49, 0xF6, 0x05, 0x3C, 0xC7};
-    DeviceAddress thermal_probe_one = { 0x28, 0x02, 0x45, 0x49, 0xF6, 0x32, 0x3C, 0xC5 }; 
+    DeviceAddress thermal_probe_zero = { 0x28, 0x02, 0x45, 0x49, 0xF6, 0x32, 0x3C, 0xC5 }; 
+    DeviceAddress thermal_probe_one = { 0x28, 0x1A, 0xCE, 0x49, 0xF6, 0x05, 0x3C, 0xC7};
     DeviceAddress thermal_probe_two = { 0x28, 0xCF, 0x67, 0x49, 0xF6, 0x4D, 0x3C, 0xC5 };
 
     systemData.temperatureSystem = { DEVICE_DISCONNECTED_C }; // Initialize the temperature system data to DEVICE_DISCONNECTED_C, which is -127.0f
@@ -847,7 +847,7 @@ void InstrumentationReaderTask(void* parameter) {
         Serial.write(buffer, len);
 
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
-        vTaskDelay(pdMS_TO_TICKS(8000));
+        vTaskDelay(pdMS_TO_TICKS(4000));
     }
 }
 
@@ -1162,7 +1162,7 @@ void setup() {\
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
-    xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
+    //xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     //xTaskCreate(EncoderControlTask, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
