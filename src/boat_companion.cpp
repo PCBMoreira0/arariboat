@@ -82,7 +82,7 @@ void LedBlinkerTask(void* parameter) {
         static uint8_t counter = 0;
 
         // Define the rhythm pattern
-        constexpr uint8_t pattern[] = {1, 0, 1, 0, 1, 1, 0, 0}; // Example pattern
+        constexpr uint8_t pattern[] = {1, 0, 1, 0, 1, 0, 0, 0}; // Example pattern
 
         // Calculate the position within the pattern
         uint8_t patternSize = sizeof(pattern) / sizeof(pattern[0]);
@@ -92,7 +92,7 @@ void LedBlinkerTask(void* parameter) {
         bool buzzerState = pattern[patternPosition] != 0;
 
         if (blink_rate == BlinkRate::Fast) {
-            dacWrite(buzzer_pin, buzzerState ? 50 : 0);
+            dacWrite(buzzer_pin, buzzerState ? 150 : 0);
         } else {
             dacWrite(buzzer_pin, 0);
         }
@@ -900,7 +900,7 @@ float CalculateCurrentT201(const float pin_voltage, const float selected_full_sc
     const float full_input_current = selected_full_scale_range;
     const float slope = (full_input_current - zero_input_current) / (full_input_voltage - zero_input_voltage);
     const float intercept = zero_input_current - slope * zero_input_voltage;
-    return slope * pin_voltage + intercept;
+    return (slope * pin_voltage + intercept) / 10;
 }
 
 /// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
