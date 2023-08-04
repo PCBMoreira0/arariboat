@@ -733,7 +733,7 @@ float CalculateVoltagePrimaryResistor(const float pin_voltage, const float senso
 float CalculateInputVoltage(const float voltage_primary_resistor_drop, const float primary_voltage_divider_ratio);
 float LinearCorrection(const float input_value, const float slope, const float intercept);
 float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ratio, const int32_t burden_resistance);
-float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistance);
+float CalculateCurrentT201(float pin_voltage, int low_scale_range, int full_scale_range, int burden_resistance, bool bipolar_mode = false);
 void InstrumentationReaderTask(void* parameter) {
 
      // The ADS1115 is a Delta-sigma (ΔΣ) ADC, which is based on the principle of oversampling. The input
@@ -787,7 +787,12 @@ void InstrumentationReaderTask(void* parameter) {
         constexpr int32_t voltage_burden_resistance = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
 
         // Values associated with current sensors.
-        constexpr int32_t selected_full_scale_range = 100; // Selected full scale range of the T201 current sensor.
+        constexpr int32_t motor_low_scale_range = 0; // Unidirectional reading, which means that the current sensor can only measure positive current.
+        constexpr int32_t motor_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the motor.
+        constexpr int32_t battery_low_scale_range = -25; // Selected full scale range of the T201 current sensor for the battery.
+        constexpr int32_t battery_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the battery.
+        constexpr int32_t mppt_low_scale_range = 100; // Unidirectional reading, which means that the current sensor can only measure positive current.
+        constexpr int32_t mppt_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the MPPT output.
         constexpr float current_conversion_ratio = 0.001f; // Output Conversion ratio of the LA55-P current sensor.
         constexpr int32_t motor_burden_resistance = 22;
         constexpr int32_t battery_burden_resistance = 22;
@@ -809,9 +814,9 @@ void InstrumentationReaderTask(void* parameter) {
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
         float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.1511f);
         
-        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, selected_full_scale_range, motor_burden_resistance);
-        float battery_current = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
-        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance);
+        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, motor_low_scale_range, motor_full_scale_range, motor_burden_resistance);
+        float battery_current = CalculateCurrentT201(current_battery_pin_voltage, battery_low_scale_range, battery_full_scale_range, battery_burden_resistance, true);
+        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, mppt_low_scale_range, mppt_full_scale_range, mppt_burden_resistance);
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
 
            // Use this to calibrate the voltage sensor 
@@ -890,17 +895,40 @@ float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ra
 /// @param burden_resistance Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
 /// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
 /// @return Input current at primary side of LA-55P current sensor.
-float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistance) {
+float CalculateCurrentT201(float pin_voltage, int low_scale_range, int full_scale_range, int burden_resistance, bool bipolar_mode) {
     
     // Calculates the slope and intercept of the linear equation that relates input current to output voltage.
-    const float zero_input_voltage = 4.0f * burden_resistance * 0.001f; // 4mA * burden resistor
-    const float full_input_voltage = 20.0f * burden_resistance * 0.001f; // 20mA * burden resistor
-    if (pin_voltage < zero_input_voltage) return 0.0f; // If the voltage is below the minimum value, return 0.0f (no current)
-    const float zero_input_current = 0.0f;
-    const float full_input_current = selected_full_scale_range;
-    const float slope = (full_input_current - zero_input_current) / (full_input_voltage - zero_input_voltage);
-    const float intercept = zero_input_current - slope * zero_input_voltage;
-    return (slope * pin_voltage + intercept) / 10;
+    float zero_input_voltage = 4.0f * burden_resistance * 0.001f; // 4mA * burden resistor
+    float full_input_voltage = 20.0f * burden_resistance * 0.001f; // 20mA * burden resistor
+
+    if (!bipolar_mode)
+    {
+        low_scale_range = 0;
+        if (pin_voltage < zero_input_voltage)
+        {
+            return 0.0f; // If the voltage is outside the valid range, return 0.0f (no current)
+        }
+    }
+    else
+    {
+        if (pin_voltage < zero_input_voltage || pin_voltage > full_input_voltage)
+        {
+            return 0.0f; // If the voltage is outside the valid range, return 0.0f (no current)
+        }
+
+        // Determine the direction of the current (positive or negative) based on the bipolar mode
+
+        float middle_input_voltage = (full_input_voltage + zero_input_voltage) / 2.0f;
+
+    }
+
+    // Calculate the current using the linear equation
+    float low_input_current = low_scale_range;
+    float full_input_current = full_scale_range;
+    float slope = (full_input_current - low_input_current) / (full_input_voltage - zero_input_voltage);
+    float intercept = low_input_current - slope * zero_input_voltage;
+    float current = (slope * pin_voltage + intercept);
+    return current;    
 }
 
 /// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
