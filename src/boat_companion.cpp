@@ -807,11 +807,11 @@ void InstrumentationReaderTask(void* parameter) {
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
         float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
-        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.1511f);
+        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.5711f);
         
-        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, selected_full_scale_range, motor_burden_resistance);
+        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, selected_full_scale_range, motor_burden_resistance) / 10;
         float battery_current = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
-        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance);
+        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance) / 10;
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
 
            // Use this to calibrate the voltage sensor 
@@ -900,9 +900,8 @@ float CalculateCurrentT201(const float pin_voltage, const float selected_full_sc
     const float full_input_current = selected_full_scale_range;
     const float slope = (full_input_current - zero_input_current) / (full_input_voltage - zero_input_voltage);
     const float intercept = zero_input_current - slope * zero_input_voltage;
-    return (slope * pin_voltage + intercept) / 10;
+    return (slope * pin_voltage + intercept);
 }
-
 /// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
 /// @param input 
 /// @param slope 
