@@ -100,6 +100,7 @@ void LedBlinkerTask(void* parameter) {
         counter++;
     };
   
+    FastBlinkPulse(led_pin);
     while (true) {
 
         static uint32_t previous_blink_time = millis();
@@ -150,7 +151,7 @@ void WifiConnectionTask(void* parameter) {
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial.println("\n[WIFI]Connected to WiFi");
                     xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
-                    xTaskNotifyGive(vpnConnectionTaskHandle); 
+                    //xTaskNotifyGive(vpnConnectionTaskHandle); 
                     xTaskNotifyGive(serverTaskHandle);
                     break;
                 }
@@ -733,50 +734,9 @@ float CalculateVoltagePrimaryResistor(const float pin_voltage, const float senso
 float CalculateInputVoltage(const float voltage_primary_resistor_drop, const float primary_voltage_divider_ratio);
 float LinearCorrection(const float input_value, const float slope, const float intercept);
 float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ratio, const int32_t burden_resistance);
-float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistance);
+float CalculateCurrentT201(float pin_voltage, int low_scale_range, int full_scale_range, int burden_resistance, bool bipolar_mode = false);
 void InstrumentationReaderTask(void* parameter) {
-
-     // The ADS1115 is a Delta-sigma (ΔΣ) ADC, which is based on the principle of oversampling. The input
-    // signal of a ΔΣ ADC is sampled at a high frequency (modulator frequency) and subsequently filtered and
-    // decimated in the digital domain to yield a conversion result at the respective output data rate.
-    // The ratio between modulator frequency and output data rate is called oversampling ratio (OSR). By increasing the OSR, and thus
-    // reducing the output data rate, the noise performance of the ADC can be optimized. In other words, the input-
-    // referred noise drops when reducing the output data rate because more samples of the internal modulator are
-    // averaged to yield one conversion result. Increasing the gain, therefore reducing the input voltage range, also reduces the input-referred noise, which is
-    // particularly useful when measuring low-level signals
-
-    // The use of an external ADC, the ADS1115, was chosen to obtain higher resolution and linearity, as well as programmable gain to avoid the need for instrumentation amplifiers.
-    // The ADS1115 is a 16-bit ADC with 4 channels. It is used to read the voltage of the battery and the current of motor, the MPPT output and the battery current or auxiliary system current.
-    // The ADS1115 has 4 addresses, which are determined by the state of the ADDR pin. Our board has a solder bridge that allows selection between 0x48 and 0x49.
-    // The ADS1115 is connected to the ESP32 via I2C. The ESP32 is the master and the ADS1115 is the slave. It uses the default Wire instance at pins 21(SDA) and 22(SCL) for communication.
-
-
-    // Make sure that the ADS1115 is connected to the ESP32 via I2C and that the solder bridge is set to the correct address.
-    // A common ground is also required between the ESP32 and the ADS1115, which is given when the ESP32 is powered by the same battery as the ADS1115,
-    // but not when the ESP32 is powered by the USB port during tests on the laboratory workbench. In this case, the ground of the ESP32 and the ADS1115
-    // must be explictly connected together for the I2C communication to work. If the ADS1115 is not detected, check continuity of the wires with multimeter.
-    
-    Adafruit_ADS1115 adc; 
-    constexpr uint8_t adc_addresses[] = {0x48, 0x49}; // Address is determined by a solder bridge on the instrumentation board.
-    adc.setGain(GAIN_FOUR); // Configuring the PGA( Programmable Gain Amplifier) to amplify the signal by 4 times, so that the maximum input voltage is +/- 1.024V
-    adc.setDataRate(RATE_ADS1115_16SPS); // Setting a low data rate to increase the oversampling ratio of the ADC and thus reduce the noise.
-    
-    bool is_adc_initialized = false;
-    
-    while (!is_adc_initialized) {
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite); // Blinks the LED to indicate that the ADC is not initialized yet.
-        for (auto address : adc_addresses) {
-            Serial.printf("\n[ADS]Trying to initialize ADS1115 at address 0x%x\n", address);
-            if (adc.begin(address)) {
-                Serial.printf("\n[ADS]ADS1115 successfully initialized at address 0x%x\n", address);
-                is_adc_initialized = true;
-                xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite); // Return LED to default blink rate.
-                break;
-            }
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-    }
-    
+ 
     while (true) {
         // Check and confirm which values of resistors are being used on the board.
         // Values associated with the voltage sensor.
@@ -787,7 +747,13 @@ void InstrumentationReaderTask(void* parameter) {
         constexpr int32_t voltage_burden_resistance = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
 
         // Values associated with current sensors.
-        constexpr int32_t selected_full_scale_range = 100; // Selected full scale range of the T201 current sensor.
+
+        constexpr int32_t motor_low_scale_range = 0; // Unidirectional reading, which means that the current sensor can only measure positive current.
+        constexpr int32_t motor_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the motor.
+        constexpr int32_t battery_low_scale_range = -25; // Selected full scale range of the T201 current sensor for the battery.
+        constexpr int32_t battery_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the battery.
+        constexpr int32_t mppt_low_scale_range = 100; // Unidirectional reading, which means that the current sensor can only measure positive current.
+        constexpr int32_t mppt_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the MPPT output.
         constexpr float current_conversion_ratio = 0.001f; // Output Conversion ratio of the LA55-P current sensor.
         constexpr int32_t motor_burden_resistance = 22;
         constexpr int32_t battery_burden_resistance = 22;
@@ -797,10 +763,10 @@ void InstrumentationReaderTask(void* parameter) {
         // As we are using the 4 analog inputs for each of the 4 sensors, single ended measurements are being used in order to access all 4 sensors.
         // When using single ended mode, the maximum output code is 0x7FFF(32767), which corresponds to the full-scale input voltage.
 
-        float battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
-        float motor_current_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
-        float current_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
-        float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
+        float battery_pin_voltage = 0.4;
+        float motor_current_pin_voltage = 0.180f;
+        float current_battery_pin_voltage = 0.180f;
+        float current_mppt_pin_voltage = 0.180f;
         //DEBUG_PRINTF("\n[Instrumentation-PIN-VOLTAGE]Battery voltage: %f, Motor voltage: %f, Battery voltage: %f, MPPT voltage: %f\n", battery_pin_voltage, motor_current_pin_voltage, current_battery_pin_voltage, current_mppt_pin_voltage);
 
         // Calibrate the voltage by comparing the value of voltage_primary_resistor_drop variable against the actual voltage drop on the primary resistor using a multimeter. 
@@ -809,9 +775,9 @@ void InstrumentationReaderTask(void* parameter) {
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
         float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.1511f);
         
-        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, selected_full_scale_range, motor_burden_resistance);
-        float battery_current = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
-        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, selected_full_scale_range, mppt_burden_resistance);
+        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, motor_low_scale_range, motor_full_scale_range, motor_burden_resistance);
+        float battery_current = CalculateCurrentT201(current_battery_pin_voltage, battery_low_scale_range, battery_full_scale_range, battery_burden_resistance, true);
+        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, mppt_low_scale_range, mppt_full_scale_range, mppt_burden_resistance);
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
 
            // Use this to calibrate the voltage sensor 
@@ -890,17 +856,42 @@ float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ra
 /// @param burden_resistance Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
 /// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
 /// @return Input current at primary side of LA-55P current sensor.
-float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistance) {
-    
+
+float CalculateCurrentT201(float pin_voltage, int low_scale_range, int full_scale_range, int burden_resistance, bool bipolar_mode)
+{
+
     // Calculates the slope and intercept of the linear equation that relates input current to output voltage.
-    const float zero_input_voltage = 4.0f * burden_resistance * 0.001f; // 4mA * burden resistor
-    const float full_input_voltage = 20.0f * burden_resistance * 0.001f; // 20mA * burden resistor
-    if (pin_voltage < zero_input_voltage) return 0.0f; // If the voltage is below the minimum value, return 0.0f (no current)
-    const float zero_input_current = 0.0f;
-    const float full_input_current = selected_full_scale_range;
-    const float slope = (full_input_current - zero_input_current) / (full_input_voltage - zero_input_voltage);
-    const float intercept = zero_input_current - slope * zero_input_voltage;
-    return (slope * pin_voltage + intercept) / 10;
+    float zero_input_voltage = 4.0f * burden_resistance * 0.001f; // 4mA * burden resistor
+    float full_input_voltage = 20.0f * burden_resistance * 0.001f; // 20mA * burden resistor
+
+    if (!bipolar_mode)
+    {
+        low_scale_range = 0;
+        if (pin_voltage < zero_input_voltage)
+        {
+            return 0.0f; // If the voltage is outside the valid range, return 0.0f (no current)
+        }
+    }
+    else
+    {
+        if (pin_voltage < zero_input_voltage || pin_voltage > full_input_voltage)
+        {
+            return 0.0f; // If the voltage is outside the valid range, return 0.0f (no current)
+        }
+
+        // Determine the direction of the current (positive or negative) based on the bipolar mode
+
+        float middle_input_voltage = (full_input_voltage + zero_input_voltage) / 2.0f;
+
+    }
+
+    // Calculate the current using the linear equation
+    float low_input_current = low_scale_range;
+    float full_input_current = full_scale_range;
+    float slope = (full_input_current - low_input_current) / (full_input_voltage - zero_input_voltage);
+    float intercept = low_input_current - slope * zero_input_voltage;
+    float current = (slope * pin_voltage + intercept);
+    return current;
 }
 
 /// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
@@ -1150,21 +1141,49 @@ void StackHighWaterMeasurerTask(void* parameter) {
     }
 }
 
+void analogReader(void* parameter) {
+    while (true) {
+        constexpr uint8_t pin = 34;
+        constexpr float adc_reference_voltage = 3.3f;
+        constexpr int num_samples = 19;
+        constexpr float angular_offset = 1.0f;
+        constexpr float linear_offset = 0.13f;
+        constexpr float current_offset = 0.13f;
+        static float filtered_reading = 0.0f;
+
+
+        float voltage_reading = (analogRead(pin) * adc_reference_voltage) / 4095;
+        voltage_reading = voltage_reading * angular_offset + linear_offset;
+        filtered_reading = (voltage_reading + filtered_reading * num_samples) / (num_samples + 1);
+
+        float current = CalculateCurrentT201(filtered_reading, -25, 100, 47, true);
+        
+        static uint32_t print_timer = 0;
+        if (millis() - print_timer > 1000) {
+            print_timer = millis();
+            DEBUG_PRINTF("Voltage reading: %.2fV\n"
+                         "Current: %.2fA\n", filtered_reading, current);
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
 void setup() {\
 
     Serial.begin(4800);
-    Wire.begin(); // Master mode
+    //Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
-    xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
+    //xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
-    xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
-    xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
-    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
+    //xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
+    //xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
+    //xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
     //xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     //xTaskCreate(EncoderControlTask, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
+    xTaskCreate(analogReader, "analogReader", 4096, NULL, 1, NULL);
 }
 
 void loop() {
