@@ -1148,27 +1148,29 @@ void analogReader(void* parameter) {
         constexpr int num_samples = 19;
         constexpr float angular_offset = 1.0f;
         constexpr float linear_offset = 0.13f;
-        constexpr float current_offset = 0.13f;
+        constexpr float current_offset = 0.50f;
         static float filtered_reading = 0.0f;
+        static float filtered_current = 0.0f;
 
 
         float voltage_reading = (analogRead(pin) * adc_reference_voltage) / 4095;
         voltage_reading = voltage_reading * angular_offset + linear_offset;
         filtered_reading = (voltage_reading + filtered_reading * num_samples) / (num_samples + 1);
 
-        float current = CalculateCurrentT201(filtered_reading, -25, 100, 47, true);
+        float current = CalculateCurrentT201(filtered_reading, -25, 100, 47, true) + current_offset;
+        filtered_current = (current + filtered_current * num_samples) / (num_samples + 1);
         
         static uint32_t print_timer = 0;
         if (millis() - print_timer > 1000) {
             print_timer = millis();
             DEBUG_PRINTF("Voltage reading: %.2fV\n"
-                         "Current: %.2fA\n", filtered_reading, current);
+                         "Current: %.2fA\n", filtered_reading, filtered_current);
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
-void setup() {\
+void setup() {
 
     Serial.begin(4800);
     //Wire.begin(); // Master mode
