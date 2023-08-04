@@ -1159,12 +1159,26 @@ void analogReader(void* parameter) {
 
         float current = CalculateCurrentT201(filtered_reading, -25, 100, 47, true) + current_offset;
         filtered_current = (current + filtered_current * num_samples) / (num_samples + 1);
+        systemData.instrumentationSystem.motor_current = filtered_current;
         
         static uint32_t print_timer = 0;
         if (millis() - print_timer > 1000) {
             print_timer = millis();
             DEBUG_PRINTF("Voltage reading: %.2fV\n"
                          "Current: %.2fA\n", filtered_reading, filtered_current);
+            
+            mavlink_message_t message;
+            mavlink_instrumentation_t instrumentation  = mavlink_instrumentation_t
+            {
+                .battery_voltage = 0.0f,
+                .motor_current = filtered_current,
+                .battery_current = 0.0f,
+                .mppt_current = 0.0f
+            };
+            mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);
+            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
+            Serial.write(buffer, len);
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
