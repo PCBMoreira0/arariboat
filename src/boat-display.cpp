@@ -131,6 +131,11 @@ void ServerTask(void* parameter) {
         ESP.restart();
     });
 
+    // test route
+    server.on("/test", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", "TESTING");
+    });
+
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     
@@ -235,7 +240,7 @@ void CockpitDisplayTask(void* parameter) {
     constexpr float battery_volts_full_scale = 54.0;
     constexpr float battery_volts_zero_scale = 48.0;
     constexpr float battery_amps_full_scale = 60.0;
-    constexpr float battery_amps_zero_scale = 0.0;
+    constexpr float battery_amps_zero_scale = -25.0;
     constexpr float motor_amps_full_scale = 60.0;
     constexpr float motor_amps_zero_scale = 0.0;
     constexpr float mppt_amps_full_scale = 40.0;
@@ -259,7 +264,7 @@ void CockpitDisplayTask(void* parameter) {
 
     //                              --Red--  -Org-   -Yell-  -Grn-
     widget_battery_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
-    widget_battery_current.analogMeter(240, 30, battery_amps_zero_scale, battery_amps_full_scale, "A", "0", "15", "30", "45", "60"); 
+    widget_battery_current.analogMeter(240, 30, battery_amps_zero_scale, battery_amps_full_scale, "A", "-20", "0", "20", "40", "60"); 
 
     //                              -Red-   -Org-  -Yell-  -Grn-
     widget_motor_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
@@ -321,6 +326,7 @@ void CockpitDisplayTask(void* parameter) {
         };
 
         update_display();
+        //test_sine_wave();
         vTaskDelay(pdMS_TO_TICKS(loop_period));
     }
 }
@@ -466,11 +472,11 @@ void setup() {
     Serial.begin(4800);
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 4, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 1, &cockpitDisplayHandle);
     xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 3, NULL);
-    xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
+    //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
 void loop() {
