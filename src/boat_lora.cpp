@@ -238,7 +238,7 @@ template <std::size_t N>
 void ProcessSerialMessage(const std::array<uint8_t, N> &buffer);
 void SerialReaderTask(void* parameter) {
     
-    std::array<uint8_t, 128> buffer = { 0 };
+    std::array<uint8_t, 32> buffer = { 0 };
     static size_t bufferIndex = 0;
     while (true) {
         if (Serial.available()) {
@@ -393,6 +393,24 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     DEBUG_PRINTF("[AUX]Aux system voltage: %.2f\n", aux_system.voltage);
                     DEBUG_PRINTF("[AUX]Aux system current: %.2f\n", aux_system.current);
                     DEBUG_PRINTF("[AUX]Aux system pumps: %d\n", aux_system.pumps);
+                    break;
+                }
+                case MAVLINK_MSG_ID_LORA_PARAMS: {
+                    DEBUG_PRINTF("[RX]Received lora params from channel %d\n", channel);
+                    mavlink_lora_params_t lora_params;
+                    mavlink_msg_lora_params_decode(&message, &lora_params);
+                    
+                    flashMemory.begin("lora", false); // Open flash memory partition named "lora" in read-write mode
+                    flashMemory.putInt("codingRate4", lora_params.coding_rate);
+                    flashMemory.putInt("bandwidth", lora_params.bandwidth);
+                    flashMemory.putInt("spreadingFactor", lora_params.spreading_factor);
+                    flashMemory.putBool("crc", lora_params.crc);
+                    flashMemory.end();
+
+                    DEBUG_PRINTF("[LORA]Coding rate 4: %d\n", lora_params.coding_rate_4);
+                    DEBUG_PRINTF("[LORA]Bandwidth: %d\n", lora_params.bandwidth);
+                    DEBUG_PRINTF("[LORA]Spreading factor: %d\n", lora_params.spreading_factor);
+                    DEBUG_PRINTF("[LORA]CRC: %d\n", lora_params.crc);
                     break;
                 }
                 default: {
@@ -632,7 +650,7 @@ void setup() {
     StartLora();
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
-    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
+    //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 3, NULL);
     xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
