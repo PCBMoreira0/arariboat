@@ -4,8 +4,8 @@
 #include <AsyncTCP.h> // Asynchronous TCP library for the ESP32.
 #include <ESPAsyncWebServer.h> // Asynchronous web server for the ESP32.
 #include <AsyncElegantOTA.h> // Over the air updates for the ESP32.
-#include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
-#include "arariboat\SystemData.hpp" // Singleton class to hold system wide data
+#include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "arariboat/SystemData.hpp" // Singleton class to hold system wide data
 #include <Wire.h> // I2C library for communicating with LoRa32 board.
 #include <LoRa.h> // SandeepMistry physical layer library
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
@@ -215,6 +215,59 @@ void ServerTask(void* parameter) {
 
         }
         request->send(200, "text/html", response_message);
+    });
+
+    // Send lora_params to Lora radio via serial port Mavlink message
+    server.on("/lora-params", HTTP_GET, [](AsyncWebServerRequest *request) {
+        
+        String response_message = "<h1>Boat-Companion</h1>";
+        int bandwidth;
+        uint8_t codingRate4;
+        uint8_t spreadingFactor;
+        uint8_t crc;
+        
+        if (request->hasParam("codingRate4")) {
+            codingRate4 = request->getParam("codingRate4")->value().toInt();
+            if (codingRate4 < 5 || codingRate4 > 8) {
+                response_message += "<p>Invalid coding rate 4 value. Must be between 5 and 8.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+        }
+
+        if (request->hasParam("bandwidth")) {
+            bandwidth = request->getParam("bandwidth")->value().toInt();
+            if (bandwidth < 7E3 || bandwidth > 500E3) {
+                response_message += "<p>Invalid bandwidth value. Must be between 7E3 and 500E3.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+            response_message += "<p>Bandwidth set to " + String(bandwidth) + "</p>";
+        }
+
+        if (request->hasParam("spreadingFactor")) {
+            spreadingFactor = request->getParam("spreadingFactor")->value().toInt();
+            if (spreadingFactor < 6 || spreadingFactor > 12) {
+                response_message += "<p>Invalid spreading factor value. Must be between 6 and 12.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+            response_message += "<p>Spreading factor set to " + String(spreadingFactor) + "</p>";
+        }
+
+        if (request->hasParam("crc")) {
+            crc = request->getParam("crc")->value().equalsIgnoreCase("true");
+            response_message += "<p>CRC set to " + String(crc) + "</p>";
+        }
+
+        request->send(200, "text/html", response_message);
+
+        mavlink_message_t msg;
+        mavlink_lora_params_t lora_params = { bandwidth, spreadingFactor, codingRate4, crc };
+        mavlink_msg_lora_params_encode(1, 200, &msg, &lora_params);
+        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
+        Serial.write(buffer, len);
     });
 
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
@@ -653,7 +706,7 @@ void setup() {
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 3, NULL);
     xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
-    xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
+    //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 void loop() {
 
