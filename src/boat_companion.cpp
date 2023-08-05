@@ -18,7 +18,7 @@
 #include <Encoder.h> // Rotary encoder library.
 #include <Preferences.h> // Non-volatile storage for storing the state of the boat.
 
-#define DEBUG // Uncomment to enable debug messages.
+//#define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
 #define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
 #else
@@ -798,6 +798,8 @@ void InstrumentationReaderTask(void* parameter) {
         constexpr int32_t battery_burden_resistance = 22;
         constexpr int32_t mppt_burden_resistance = 10; 
 
+        constexpr float battery_linear_offset = -0.3f;
+
         // In the ADS1115 single ended measurements have 15 bits of resolution. Only differential measurements have 16 bits of resolution.
         // As we are using the 4 analog inputs for each of the 4 sensors, single ended measurements are being used in order to access all 4 sensors.
         // When using single ended mode, the maximum output code is 0x7FFF(32767), which corresponds to the full-scale input voltage.
@@ -812,11 +814,12 @@ void InstrumentationReaderTask(void* parameter) {
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
         float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
-        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.5711f);
+        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.1711f);
         
-        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, motor_low_scale_range, motor_full_scale_range, motor_burden_resistance) / 10;
+        float motor_current = CalculateCurrentT201(motor_current_pin_voltage, motor_low_scale_range, motor_full_scale_range, motor_burden_resistance);
         float battery_current = CalculateCurrentT201(current_battery_pin_voltage, battery_low_scale_range, battery_full_scale_range, battery_burden_resistance, true);
-        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, mppt_low_scale_range, mppt_full_scale_range, mppt_burden_resistance) / 10;
+        battery_current += battery_linear_offset;
+        float current_mppt = CalculateCurrentT201(current_mppt_pin_voltage, mppt_low_scale_range, mppt_full_scale_range, mppt_burden_resistance);
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
 
            // Use this to calibrate the voltage sensor 
@@ -1185,7 +1188,7 @@ void setup() {\
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
     xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 3, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
