@@ -357,6 +357,57 @@ void ServerTask(void* parameter) {
         request->send(200, "application/json", output);
     });
 
+    // Send lora_params to Lora radio via serial port Mavlink message
+    server.on("lora-params", HTTP_GET, [](AsyncWebServerRequest *request) {
+        
+        String response_message = "<h1>Boat-Companion</h1>";
+        int bandwidth;
+        uint8_t codingRate4;
+        uint8_t spreadingFactor;
+        uint8_t crc;
+        
+        if (request->hasParam("codingRate4")) {
+            codingRate4 = request->getParam("codingRate4")->value().toInt();
+            if (codingRate4 < 5 || codingRate4 > 8) {
+                response_message += "<p>Invalid coding rate 4 value. Must be between 5 and 8.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+        }
+
+        if (request->hasParam("bandwidth")) {
+            bandwidth = request->getParam("bandwidth")->value().toInt();
+            if (bandwidth < 7E3 || bandwidth > 500E3) {
+                response_message += "<p>Invalid bandwidth value. Must be between 7E3 and 500E3.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+            response_message += "<p>Bandwidth set to " + String(bandwidth) + "</p>";
+        }
+
+        if (request->hasParam("spreadingFactor")) {
+            spreadingFactor = request->getParam("spreadingFactor")->value().toInt();
+            if (spreadingFactor < 6 || spreadingFactor > 12) {
+                response_message += "<p>Invalid spreading factor value. Must be between 6 and 12.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+            response_message += "<p>Spreading factor set to " + String(spreadingFactor) + "</p>";
+        }
+
+        if (request->hasParam("crc")) {
+            crc = request->getParam("crc")->value().equalsIgnoreCase("true");
+            response_message += "<p>CRC set to " + String(crc) + "</p>";
+        }
+
+        mavlink_message_t msg;
+        mavlink_lora_params_t lora_params = { bandwidth, spreadingFactor, codingRate4, crc };
+        mavlink_msg_lora_params_encode(1, 200, &msg, &lora_params);
+        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
+        Serial.write(buffer, len);
+    });
+
     //Wait for notification from WiFi connection task before starting the server.
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
