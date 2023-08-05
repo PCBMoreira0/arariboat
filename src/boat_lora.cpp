@@ -12,6 +12,7 @@
 #include <ESPmDNS.h> // Allows to resolve hostnames to IP addresses within a local network.
 #include <StreamString.h> // Allows to convert a Stream object to a String object.
 #include <Preferences.h>
+Preferences flashMemory;
 
 //#define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
@@ -138,26 +139,82 @@ void ServerTask(void* parameter) {
         request->send(200, "text/html", stream.c_str());
     });
 
-    server.on("/lora-config", HTTP_GET, [](AsyncWebServerRequest *request){
-        if (request->hasParam("codingRate4") && request->hasParam("signalBandwidth") && request->hasParam("spreadingFactor") && request->hasParam("enableCrc")) {
+    server.on("/lora-config", HTTP_GET, [](AsyncWebServerRequest *request) {
+
+        flashMemory.begin("lora", false); // Open flash memory partition named "lora" in read-write mode
+        String response_message = "<h1>Boat Lora Configuration</h1>";
+        bool data_updated = false;
+
+        if (request->hasParam("codingRate4")) {
             int codingRate4 = request->getParam("codingRate4")->value().toInt();
-            int signalBandwidth = request->getParam("signalBandwidth")->value().toInt();
-            int spreadingFactor = request->getParam("spreadingFactor")->value().toInt();
-            bool enableCrc = request->getParam("enableCrc")->value().equalsIgnoreCase("true");
-
+            if (codingRate4 < 5 || codingRate4 > 8) {
+                response_message += "<p>Invalid coding rate 4 value. Must be between 5 and 8.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
             LoRa.setCodingRate4(codingRate4);
-            LoRa.setSignalBandwidth(signalBandwidth);
-            LoRa.setSpreadingFactor(spreadingFactor);
+            flashMemory.putInt("codingRate4", codingRate4);
+            response_message += "<p>Coding rate 4 set to " + String(codingRate4) + "</p>";
+            data_updated = true;
+        }
 
-            if (enableCrc) {
+        if (request->hasParam("bandwidth")) {
+            int bandwidth = request->getParam("bandwidth")->value().toInt();
+            if (bandwidth < 7E3 || bandwidth > 500E3) {
+                response_message += "<p>Invalid bandwidth value. Must be between 7E3 and 500E3.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+            LoRa.setSignalBandwidth(bandwidth);
+            flashMemory.putInt("bandwidth", bandwidth);
+            response_message += "<p>Bandwidth set to " + String(bandwidth) + "</p>";
+            data_updated = true;
+        }
+
+        if (request->hasParam("spreadingFactor")) {
+            int spreadingFactor = request->getParam("spreadingFactor")->value().toInt();
+            if (spreadingFactor < 6 || spreadingFactor > 12) {
+                response_message += "<p>Invalid spreading factor value. Must be between 6 and 12.</p>";
+                request->send(400, "text/html", response_message);
+                return;
+            }
+            LoRa.setSpreadingFactor(spreadingFactor);
+            flashMemory.putInt("spreadingFactor", spreadingFactor);
+            response_message += "<p>Spreading factor set to " + String(spreadingFactor) + "</p>";
+            data_updated = true;
+        }
+
+        if (request->hasParam("crc")) {
+            bool crc = request->getParam("crc")->value().equalsIgnoreCase("true");
+            flashMemory.putBool("crc", crc);
+            if (crc) {
                 LoRa.enableCrc();
+                response_message += "<p>CRC enabled</p>";
             } else {
                 LoRa.disableCrc();
+                response_message += "<p>CRC disabled</p>";
             }
-            request->send(200, "text/plain", "LoRa parameters updated.");
-        } else {
-            request->send(400, "text/plain", "Missing or invalid parameters.");
+            data_updated = true;
         }
+        flashMemory.end();
+
+        if (!data_updated) {
+            response_message += "<p>No data updated</p>";
+            // Retrieve stored values from flash memory
+            flashMemory.begin("lora", true); // Open flash memory partition named "lora" in read-only mode
+            int stored_spreading_factor = flashMemory.getInt("spreadingFactor", 7);
+            int stored_bandwidth = flashMemory.getInt("bandwidth", 125000);
+            int stored_coding_rate4 = flashMemory.getInt("codingRate4", 5);
+            bool stored_crc = flashMemory.getBool("crc", true);
+            flashMemory.end();
+            
+            response_message += "<p>Spreading factor: " + String(stored_spreading_factor) + "</p>";
+            response_message += "<p>Bandwidth: " + String(stored_bandwidth) + "</p>";
+            response_message += "<p>Coding rate 4: " + String(stored_coding_rate4) + "</p>";
+            response_message += "<p>CRC: " + String(stored_crc) + "</p>";
+
+        }
+        request->send(200, "text/html", response_message);
     });
 
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
@@ -181,7 +238,7 @@ template <std::size_t N>
 void ProcessSerialMessage(const std::array<uint8_t, N> &buffer);
 void SerialReaderTask(void* parameter) {
     
-    std::array<uint8_t, 32> buffer = { 0 };
+    std::array<uint8_t, 128> buffer = { 0 };
     static size_t bufferIndex = 0;
     while (true) {
         if (Serial.available()) {
@@ -504,30 +561,18 @@ void DisplayScreenTask(void* parameter) {
 /// @param parameter 
 void LoraTransmissionTask(void* parameter) {
 
-    LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
-    LoRa.setSyncWord(SYNC_WORD);
-    while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
-        Serial.println("Starting LoRa failed!");
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-    Serial.println("Starting LoRa succeeded!");
-
-    // QueueHandle_t is already a pointer, so there is no need to use the & operator when passing to the task
-    // nor casting it to a pointer again when receiving it.
-    QueueHandle_t routing_queue = (QueueHandle_t)parameter;
-
     while (true) {
-        mavlink_message_t message;
-        if (xQueueReceive(routing_queue, &message, pdMS_TO_TICKS(1000))) {
-            uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-            uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-            LoRa.beginPacket();
-            LoRa.write(buffer, len);
-            LoRa.endPacket();
-            xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify LED blinker task to blink LED
-            DEBUG_PRINTF("Sent message with ID %d\n", message.msgid);
+        mavlink_message_t heartbeat_msg;
+        mavlink_msg_heartbeat_pack(0, 0, &heartbeat_msg, MAV_TYPE_GCS, MAV_AUTOPILOT_INVALID, MAV_MODE_FLAG_DECODE_POSITION_MANUAL, 0, MAV_STATE_ACTIVE);
+        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        uint16_t len = mavlink_msg_to_send_buffer(buffer, &heartbeat_msg);
+        if (!LoRa.beginPacket()) {
+            DEBUG_PRINTF("[TX]Failed to begin packet\n", NULL);
+            return;
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
+        LoRa.write(buffer, len);
+        LoRa.endPacket();
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -548,16 +593,35 @@ void StackHighWaterMeasurerTask(void* parameter) {
 
 void StartLora() {
     LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
-    LoRa.setSyncWord(SYNC_WORD);
-    LoRa.enableCrc();
-    LoRa.setCodingRate4(5);
-    LoRa.setSignalBandwidth(500E3);
-    LoRa.setSpreadingFactor(7);
     while (!LoRa.begin(BAND)) { // Attention: initializes default SPI bus at pins 5, 18, 19, 27
         Serial.println("Starting LoRa failed!");
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
     Serial.println("Starting LoRa succeeded!");
+
+    flashMemory.begin("lora", true); // Open flash memory partition named "lora" in read-only mode
+    int stored_coding_rate4 = flashMemory.getInt("codingRate4", 5);
+    int stored_bandwidth = flashMemory.getInt("bandwidth", 125000);
+    int stored_spreading_factor = flashMemory.getInt("spreadingFactor", 7);
+    bool stored_crc = flashMemory.getBool("crc", true);
+
+    Serial.printf("Stored coding rate 4: %d\n", stored_coding_rate4);
+    Serial.printf("Stored bandwidth: %d\n", stored_bandwidth);
+    Serial.printf("Stored spreading factor: %d\n", stored_spreading_factor);
+    Serial.printf("Stored CRC: %d\n", stored_crc);
+    
+    // Set LoRa parameters by writing to registers after SPI bus is initialized
+    LoRa.setSyncWord(SYNC_WORD);
+    LoRa.setCodingRate4(stored_coding_rate4);
+    LoRa.setSignalBandwidth(stored_bandwidth);
+    LoRa.setSpreadingFactor(stored_spreading_factor);
+    if (stored_crc) {
+        LoRa.enableCrc();
+    } else {
+        LoRa.disableCrc();
+    }
+
+    flashMemory.end();
 }
 
 void setup() {
@@ -568,9 +632,9 @@ void setup() {
     StartLora();
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
-    //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
+    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 3, NULL);
-    //xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
+    xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
     xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 void loop() {
