@@ -11,8 +11,9 @@
 #include "BoardDefinitions.h" // SX1276, SDCard and OLED display pin definitions
 #include <ESPmDNS.h> // Allows to resolve hostnames to IP addresses within a local network.
 #include <StreamString.h> // Allows to convert a Stream object to a String object.
+#include <Preferences.h>
 
-#define DEBUG // Uncomment to enable debug messages.
+//#define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
 #define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
 #else
@@ -137,6 +138,28 @@ void ServerTask(void* parameter) {
         request->send(200, "text/html", stream.c_str());
     });
 
+    server.on("/lora-config", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (request->hasParam("codingRate4") && request->hasParam("signalBandwidth") && request->hasParam("spreadingFactor") && request->hasParam("enableCrc")) {
+            int codingRate4 = request->getParam("codingRate4")->value().toInt();
+            int signalBandwidth = request->getParam("signalBandwidth")->value().toInt();
+            int spreadingFactor = request->getParam("spreadingFactor")->value().toInt();
+            bool enableCrc = request->getParam("enableCrc")->value().equalsIgnoreCase("true");
+
+            LoRa.setCodingRate4(codingRate4);
+            LoRa.setSignalBandwidth(signalBandwidth);
+            LoRa.setSpreadingFactor(spreadingFactor);
+
+            if (enableCrc) {
+                LoRa.enableCrc();
+            } else {
+                LoRa.disableCrc();
+            }
+            request->send(200, "text/plain", "LoRa parameters updated.");
+        } else {
+            request->send(400, "text/plain", "Missing or invalid parameters.");
+        }
+    });
+
     // Wait for notification from WifiConnection task that WiFi is connected in order to begin the server
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     
@@ -227,11 +250,17 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
 bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
 
     mavlink_message_t message;
-    mavlink_status_t status; 
+    mavlink_status_t* status = mavlink_get_channel_status(channel);
+    
+    constexpr uint8_t arariboat_max_msg_len = 17;
+    if (status->packet_idx > arariboat_max_msg_len) {
+        DEBUG_PRINTF("Channel %d overrun. Resetting status...", channel);
+        mavlink_reset_channel_status(channel);
+    }
 
     while (byte_stream.available()) {
         uint8_t received_byte = byte_stream.read();
-        if (mavlink_parse_char(channel, received_byte, &message, &status)) {
+        if (mavlink_parse_char(channel, received_byte, &message, status)) {
             Serial.print('\n');
             switch (message.msgid) {
                 case MAVLINK_MSG_ID_HEARTBEAT: {    
@@ -244,8 +273,8 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     mavlink_msg_control_system_decode(&message, &control_system);
                     systemData.controlSystem = control_system;
 
-                    DEBUG_PRINTF("[CONTROL]DAC output: %f\n", control_system.dac_output);
-                    DEBUG_PRINTF("[CONTROL]Potentiometer signal: %f\n", control_system.potentiometer_signal);
+                    DEBUG_PRINTF("[CONTROL]DAC output: %.2f\n", control_system.dac_output);
+                    DEBUG_PRINTF("[CONTROL]Potentiometer signal: %.2f\n", control_system.potentiometer_signal);
                     break;
                 }
 
@@ -255,10 +284,10 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     mavlink_msg_instrumentation_decode(&message, &instrumentation);
                     systemData.instrumentationSystem = instrumentation;
 
-                    DEBUG_PRINTF("[INSTRUMENTATION]Battery voltage: %f\n", instrumentation.battery_voltage);
-                    DEBUG_PRINTF("[INSTRUMENTATION]Motor current: %f\n", instrumentation.motor_current);
-                    DEBUG_PRINTF("[INSTRUMENTATION]Battery current: %f\n", instrumentation.battery_current);
-                    DEBUG_PRINTF("[INSTRUMENTATION]MPPT current: %f\n", instrumentation.mppt_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Battery voltage: %.2f\n", instrumentation.battery_voltage);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Motor current: %.2f\n", instrumentation.motor_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]Battery current: %.2f\n", instrumentation.battery_current);
+                    DEBUG_PRINTF("[INSTRUMENTATION]MPPT current: %.2f\n", instrumentation.mppt_current);
                     break;
                 }
                 case MAVLINK_MSG_ID_TEMPERATURES: {
@@ -272,17 +301,17 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     if (systemData.temperatureSystem.temperature_motor == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("[Temperature]Motor: Probe disconnected\n", NULL);
                     } else {
-                        DEBUG_PRINTF("[Temperature]Motor: %f\n", temperatures.temperature_motor); // [Temperature][last byte of probe address] = value is the format
+                        DEBUG_PRINTF("[Temperature]Motor: %.2f\n", temperatures.temperature_motor); // [Temperature][last byte of probe address] = value is the format
                     }
                     if (systemData.temperatureSystem.temperature_battery == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("\n[Temperature]Battery: Probe disconnected\n", NULL);
                     } else {
-                        DEBUG_PRINTF("[Temperature]Battery: %f\n", temperatures.temperature_battery); // [Temperature][last byte of probe address] = value is the format
+                        DEBUG_PRINTF("[Temperature]Battery: %.2f\n", temperatures.temperature_battery); // [Temperature][last byte of probe address] = value is the format
                     }                  
                     if (systemData.temperatureSystem.temperature_mppt == DEVICE_DISCONNECTED_C) {
                         DEBUG_PRINTF("[Temperature]MPPT: Probe disconnected\n", NULL);
                     } else {
-                        DEBUG_PRINTF("[Temperature]MPPT: %f\n", temperatures.temperature_mppt);
+                        DEBUG_PRINTF("[Temperature]MPPT: %.2f\n", temperatures.temperature_mppt);
                     }
                     #endif
 
@@ -294,8 +323,8 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     mavlink_msg_gps_info_decode(&message, &gps_info);
                     systemData.gpsSystem = gps_info;
 
-                    DEBUG_PRINTF("[GPS]Latitude: %f\n", gps_info.latitude);
-                    DEBUG_PRINTF("[GPS]Longitude: %f\n", gps_info.longitude);
+                    DEBUG_PRINTF("[GPS]Latitude: %.2f\n", gps_info.latitude);
+                    DEBUG_PRINTF("[GPS]Longitude: %.2f\n", gps_info.longitude);
                     break;
                 }
                 case MAVLINK_MSG_ID_AUX_SYSTEM: {
@@ -304,8 +333,8 @@ bool ProcessStreamChannel(Stream& byte_stream, mavlink_channel_t channel) {
                     mavlink_msg_aux_system_decode(&message, &aux_system);
                     systemData.auxiliarySystem = aux_system;
 
-                    DEBUG_PRINTF("[AUX]Aux system voltage: %f\n", aux_system.voltage);
-                    DEBUG_PRINTF("[AUX]Aux system current: %f\n", aux_system.current);
+                    DEBUG_PRINTF("[AUX]Aux system voltage: %.2f\n", aux_system.voltage);
+                    DEBUG_PRINTF("[AUX]Aux system current: %.2f\n", aux_system.current);
                     DEBUG_PRINTF("[AUX]Aux system pumps: %d\n", aux_system.pumps);
                     break;
                 }
@@ -520,6 +549,7 @@ void StackHighWaterMeasurerTask(void* parameter) {
 void StartLora() {
     LoRa.setPins(CONFIG_NSS, CONFIG_RST, CONFIG_DIO0); // Use ESP32 pins instead of default Arduino pins set by LoRa constructor
     LoRa.setSyncWord(SYNC_WORD);
+    LoRa.enableCrc();
     LoRa.setCodingRate4(5);
     LoRa.setSignalBandwidth(500E3);
     LoRa.setSpreadingFactor(7);
