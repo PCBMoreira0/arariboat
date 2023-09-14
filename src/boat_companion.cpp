@@ -18,12 +18,14 @@
 #include <Encoder.h> // Rotary encoder library.
 #include <Preferences.h> // Non-volatile storage for storing the state of the boat.
 
-//#define DEBUG // Uncomment to enable debug messages.
+#define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
 #define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
 #else
 #define DEBUG_PRINTF(message, ...)
 #endif
+
+const char* hostnameGlobal = "placa-velha";
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -177,7 +179,8 @@ void ServerTask(void* parameter) {
         };
 
         // Create the HTML content with raw CSS styles
-        String htmlContent = "<html><head><title>Boat-Companion</title>"
+        String htmlContent = "<html><head>"
+                            "<title>" + String(hostnameGlobal) + "</title>"
                             "<style>"
                             "body { font-family: Arial, sans-serif; background-color: #f7f7f7; margin: 0; padding: 0; }"
                             ".container { padding: 10px; display: flex; flex-wrap: wrap; }"
@@ -194,7 +197,7 @@ void ServerTask(void* parameter) {
 
         // Create blue card for WiFi info
         htmlContent += "<div class='card blue-card'>";
-        htmlContent += "<h1>Boat Companion</h1>";
+        htmlContent += "<h1>" + String(hostnameGlobal) + "</h1>";
         htmlContent += "<p>WiFi connected: " + WiFi.SSID() + "</p>";
         htmlContent += "<p>IP address: " + WiFi.localIP().toString() + "</p>";
         htmlContent += "</div>";
@@ -412,7 +415,7 @@ void ServerTask(void* parameter) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
     // Allow the server to be accessed by hostname instead of IP address.
-    if(!MDNS.begin("boat-companion")) {
+    if(!MDNS.begin(hostnameGlobal)) {
         Serial.println("[MDNS]Error starting mDNS!");
     }
     
@@ -495,8 +498,8 @@ void VPNConnectionTask(void* parameter) {
     // By attaching a router with a SIM slot on the boat, messages can be exchanged by both the internet, using HTTP or WebSockets, and the LoRa radio.
 
     // Husarnet VPN configuration parameters
-    const char* hostName = "boat32"; // Host name can be used to access the device instead of typing IPV6 address
-    const char* husarnetJoinCode = "fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p";
+    const char* hostName = hostnameGlobal; // Host name can be used to access the device instead of typing IPV6 address
+    const char* husarnetJoinCode = "fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/6xGMdTUA3N8RT2FzprVMEi";
     const char* dashboardURL = "default";
 
     // Wait for notification that WiFi is connected before starting the VPN.
@@ -865,7 +868,7 @@ void InstrumentationReaderTask(void* parameter) {
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
         float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
-        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.1711f);
+        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 1.0f, 0.0f);
         
         float motor_current = CalculateCurrentT201(motor_current_pin_voltage, motor_low_scale_range, motor_full_scale_range, motor_burden_resistance);
         float battery_current = CalculateCurrentT201(current_battery_pin_voltage, battery_low_scale_range, battery_full_scale_range, battery_burden_resistance, true);
@@ -874,16 +877,16 @@ void InstrumentationReaderTask(void* parameter) {
         if (systemData.debug_print & SystemData::debug_print_flags::Instrumentation) {
 
            // Use this to calibrate the voltage sensor 
-            //DEBUG_PRINTF(    "\n"
-            //                "[Instrumentation]Primary resistor voltage drop: %.2fV\n"
-            //                "[Instrumentation]Battery: %.2fV\n"
-            //                "[Instrumentation]Calibrated battery: %.2fV\n"
-            //                "[Instrumentation]Motor current: %.2fA\n"
-            //                "[Instrumentation]Battery current: %.2fA\n"
-            //                "[Instrumentation]MPPT current: %.2fA\n",
+           //DEBUG_PRINTF(    "\n"
+           //                "[Instrumentation]Primary resistor voltage drop: %.2fV\n"
+           //                "[Instrumentation]Battery: %.2fV\n"
+           //                "[Instrumentation]Calibrated battery: %.2fV\n"
+           //                "[Instrumentation]Motor current: %.2fA\n"
+           //                "[Instrumentation]Battery current: %.2fA\n"
+           //                "[Instrumentation]MPPT current: %.2fA\n",
             //voltage_primary_resistor_drop, battery_voltage, calibrated_battery_voltage, motor_current, battery_current, current_mppt);
 
-            DEBUG_PRINTF(    "\n"
+        DEBUG_PRINTF(    "\n"
                             "[Instrumentation]Battery: %.2fV\n"
                             "[Instrumentation]Motor current: %.2fA\n"
                             "[Instrumentation]Battery current: %.2fA\n"
@@ -906,7 +909,7 @@ void InstrumentationReaderTask(void* parameter) {
         Serial.write(buffer, len);
 
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
-        vTaskDelay(pdMS_TO_TICKS(4000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
@@ -1234,15 +1237,15 @@ void StackHighWaterMeasurerTask(void* parameter) {
 
 void setup() {\
 
-    Serial.begin(4800);
+    Serial.begin(9600);
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
     xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 3, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
-    xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
-    xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
+    //xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
+    //xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
     //xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     //xTaskCreate(EncoderControlTask, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
