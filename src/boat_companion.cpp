@@ -18,7 +18,7 @@
 #include <Encoder.h> // Rotary encoder library.
 #include <Preferences.h> // Non-volatile storage for storing the state of the boat.
 
-//#define DEBUG // Uncomment to enable debug messages.
+#define DEBUG // Uncomment to enable debug messages.
 #ifdef DEBUG
 #define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
 #else
@@ -125,10 +125,10 @@ void WifiConnectionTask(void* parameter) {
     
     // Store WiFi credentials in a hashtable.
     std::unordered_map<const char*, const char*> wifiCredentials;
-    wifiCredentials["Ursula"] = "biaviad36";
+    wifiCredentials["NITEE"] = "nitee123";
+    wifiCredentials["HANGAR"] = "vitorfreire123";
     wifiCredentials["EMobil 1"] = "faraboia";
     wifiCredentials["Innorouter"] = "innomaker";
-    wifiCredentials["NITEE"] = "nitee123";
     
     while (true) {
         if (WiFi.status() != WL_CONNECTED) {
@@ -150,7 +150,7 @@ void WifiConnectionTask(void* parameter) {
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial.println("\n[WIFI]Connected to WiFi");
                     xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
-                    xTaskNotifyGive(vpnConnectionTaskHandle); 
+                    //xTaskNotifyGive(vpnConnectionTaskHandle); 
                     xTaskNotifyGive(serverTaskHandle);
                     break;
                 }
@@ -400,12 +400,12 @@ void ServerTask(void* parameter) {
             response_message += "<p>CRC set to " + String(crc) + "</p>";
         }
 
-        mavlink_message_t msg;
-        mavlink_lora_params_t lora_params = { bandwidth, spreadingFactor, codingRate4, crc };
-        mavlink_msg_lora_params_encode(1, 200, &msg, &lora_params);
-        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-        uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
-        Serial.write(buffer, len);
+        //mavlink_message_t msg;
+        //mavlink_lora_params_t lora_params = { bandwidth, spreadingFactor, codingRate4, crc };
+        //mavlink_msg_lora_params_encode(1, 200, &msg, &lora_params);
+        //uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+        //uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
+        //Serial.write(buffer, len);
     });
 
     //Wait for notification from WiFi connection task before starting the server.
@@ -832,7 +832,7 @@ void InstrumentationReaderTask(void* parameter) {
         // Check and confirm which values of resistors are being used on the board.
         // Values associated with the voltage sensor.
         constexpr float voltage_conversion_ratio = 2.50f; // Datasheet gives a reference value of 2.50, but here it is being used an iterative process to find a value that satisfies the conversion measurements.
-        constexpr int32_t voltage_primary_resistance = 5000; // Equivalent resistance connected to primary side of LV-20P voltage sensor / 2 parallel resistors of 10k each.
+        constexpr int32_t voltage_primary_resistance = 2200; // Equivalent resistance connected to primary side of LV-20P voltage sensor / 2 parallel resistors of 10k each.
         constexpr int32_t voltage_primary_coil_resistance = 250; // Resistance of the primary coil of the LV-20P voltage sensor.
         constexpr float primary_voltage_divider_ratio  = (float)voltage_primary_coil_resistance / voltage_primary_resistance;
         constexpr int32_t voltage_burden_resistance = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
@@ -842,12 +842,12 @@ void InstrumentationReaderTask(void* parameter) {
         constexpr int32_t motor_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the motor.
         constexpr int32_t battery_low_scale_range = -25; // Selected full scale range of the T201 current sensor for the battery.
         constexpr int32_t battery_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the battery.
-        constexpr int32_t mppt_low_scale_range = 100; // Unidirectional reading, which means that the current sensor can only measure positive current.
+        constexpr int32_t mppt_low_scale_range = 0; // Unidirectional reading, which means that the current sensor can only measure positive current.
         constexpr int32_t mppt_full_scale_range = 100; // Selected full scale range of the T201 current sensor for the MPPT output.
         constexpr float current_conversion_ratio = 0.001f; // Output Conversion ratio of the LA55-P current sensor.
         constexpr int32_t motor_burden_resistance = 22;
         constexpr int32_t battery_burden_resistance = 22;
-        constexpr int32_t mppt_burden_resistance = 10; 
+        constexpr int32_t mppt_burden_resistance = 22; 
 
         constexpr float battery_linear_offset = -0.3f;
 
@@ -865,7 +865,7 @@ void InstrumentationReaderTask(void* parameter) {
         // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
         float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
         float battery_voltage = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
-        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 0.9645f, 1.1711f);
+        float calibrated_battery_voltage = LinearCorrection(battery_voltage, 1.00f, 0.00f);
         
         float motor_current = CalculateCurrentT201(motor_current_pin_voltage, motor_low_scale_range, motor_full_scale_range, motor_burden_resistance);
         float battery_current = CalculateCurrentT201(current_battery_pin_voltage, battery_low_scale_range, battery_full_scale_range, battery_burden_resistance, true);
@@ -896,7 +896,7 @@ void InstrumentationReaderTask(void* parameter) {
         systemData.instrumentationSystem.battery_current = battery_current;
         systemData.instrumentationSystem.mppt_current = current_mppt;
 
-        // Prepare and send Mavlink message
+        //Prepare and send Mavlink message
         mavlink_message_t message;
         mavlink_instrumentation_t instrumentation = systemData.instrumentationSystem;
         
@@ -1234,15 +1234,15 @@ void StackHighWaterMeasurerTask(void* parameter) {
 
 void setup() {\
 
-    Serial.begin(4800);
+    Serial.begin(9600);
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
-    xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
+    //xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 3, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
-    xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
-    xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
+    //xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
+    //xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 2, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 2, &instrumentationReaderTaskHandle);
     //xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     //xTaskCreate(EncoderControlTask, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
