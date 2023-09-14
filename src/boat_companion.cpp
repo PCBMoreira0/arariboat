@@ -25,6 +25,8 @@
 #define DEBUG_PRINTF(message, ...)
 #endif
 
+const char* hostnameGlobal = "placa-nova"; // Hostname used to access the boat from the ground station.
+
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
@@ -124,11 +126,11 @@ void LedBlinkerTask(void* parameter) {
 void WifiConnectionTask(void* parameter) {
     
     // Store WiFi credentials in a hashtable.
-    std::unordered_map<const char*, const char*> wifiCredentials;
-    wifiCredentials["NITEE"] = "nitee123";
+    std::map<const char*, const char*> wifiCredentials;
+    //wifiCredentials["NITEE"] = "nitee123";
     wifiCredentials["HANGAR"] = "vitorfreire123";
     wifiCredentials["EMobil 1"] = "faraboia";
-    wifiCredentials["Innorouter"] = "innomaker";
+    //wifiCredentials["Innorouter"] = "innomaker";
     
     while (true) {
         if (WiFi.status() != WL_CONNECTED) {
@@ -177,7 +179,7 @@ void ServerTask(void* parameter) {
         };
 
         // Create the HTML content with raw CSS styles
-        String htmlContent = "<html><head><title>Boat-Companion</title>"
+        String htmlContent = "<html><head><title>" + (String)hostnameGlobal + "</title>"
                             "<style>"
                             "body { font-family: Arial, sans-serif; background-color: #f7f7f7; margin: 0; padding: 0; }"
                             ".container { padding: 10px; display: flex; flex-wrap: wrap; }"
@@ -194,7 +196,7 @@ void ServerTask(void* parameter) {
 
         // Create blue card for WiFi info
         htmlContent += "<div class='card blue-card'>";
-        htmlContent += "<h1>Boat Companion</h1>";
+        htmlContent += "<h1>" + (String)hostnameGlobal + "</h1>";
         htmlContent += "<p>WiFi connected: " + WiFi.SSID() + "</p>";
         htmlContent += "<p>IP address: " + WiFi.localIP().toString() + "</p>";
         htmlContent += "</div>";
@@ -412,7 +414,7 @@ void ServerTask(void* parameter) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
     // Allow the server to be accessed by hostname instead of IP address.
-    if(!MDNS.begin("boat-companion")) {
+    if(!MDNS.begin(hostnameGlobal)) {
         Serial.println("[MDNS]Error starting mDNS!");
     }
     
@@ -495,8 +497,8 @@ void VPNConnectionTask(void* parameter) {
     // By attaching a router with a SIM slot on the boat, messages can be exchanged by both the internet, using HTTP or WebSockets, and the LoRa radio.
 
     // Husarnet VPN configuration parameters
-    const char* hostName = "boat32"; // Host name can be used to access the device instead of typing IPV6 address
-    const char* husarnetJoinCode = "fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/YNqd5m2Bjp65Miucf9R95p";
+    const char* hostName = hostnameGlobal; // Host name can be used to access the device instead of typing IPV6 address
+    const char* husarnetJoinCode = "fc94:b01d:1803:8dd8:b293:5c7d:7639:932a/6xGMdTUA3N8RT2FzprVMEi";
     const char* dashboardURL = "default";
 
     // Wait for notification that WiFi is connected before starting the VPN.
@@ -906,7 +908,7 @@ void InstrumentationReaderTask(void* parameter) {
         Serial.write(buffer, len);
 
         xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
-        vTaskDelay(pdMS_TO_TICKS(4000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
