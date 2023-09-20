@@ -127,7 +127,7 @@ void WifiConnectionTask(void* parameter) {
     
     // Store WiFi credentials in a hashtable.
     std::map<const char*, const char*> wifiCredentials;
-    //wifiCredentials["NITEE"] = "nitee123";
+    wifiCredentials["NITEE"] = "nitee123";
     wifiCredentials["HANGAR"] = "vitorfreire123";
     wifiCredentials["EMobil 1"] = "faraboia";
     //wifiCredentials["Innorouter"] = "innomaker";
@@ -1236,7 +1236,7 @@ void StackHighWaterMeasurerTask(void* parameter) {
 
 void setup() {\
 
-    Serial.begin(9600);
+    Serial.begin(4800);
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
