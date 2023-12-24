@@ -27,8 +27,14 @@ create a folder associated with each branch and attach a worktree to each. It wi
 simply by opening the folder instead of having to stash your current edits, checkout to another branch, do your work, then
 checkout back to the original branch and pop the stash.
 
-The following two links explain this procedure, as well as giving a shell script that automatically clones the bare repository
-and sets remote tracking branches for the git fetch origin operation:
+The following two links explain this produce that includes cloning the bare repository and setting remote tracking branches for the git fetch origin operation:
 https://morgan.cugerone.com/blog/how-to-use-git-worktree-and-in-a-clean-way/
 https://morgan.cugerone.com/blog/workarounds-to-git-worktree-using-bare-repository-and-cannot-fetch-remote-branches/
+
+Based on its contents, a powershell/bash script was created in order to facilitate the cloning of this repository.
+Place it on a folder within the PATH environment variables or create a new one, then call it following the instructions.
+
+https://github.com/takamasanumuro/BareRepositoryCloner/tree/main
+
+
 
