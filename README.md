@@ -20,3 +20,15 @@ while it waits for any data to show up.
 
 Besides that, the main board also sends the data to another ESP32 present in the cockpit, which has a TFT display to show
 system status to the pilot, as well as the measurements taken by the instrumentation  board.
+
+Best way to work with this repository is by using the combination of a bare repository and git worktree, which allows
+you to separate the folder responsible for the git directory itself from the files under version control. Then you can
+create a folder associated with each branch and attach a worktree to each. It will allow to work under a different branch
+simply by opening the folder instead of having to stash your current edits, checkout to another branch, do your work, then
+checkout back to the original branch and pop the stash.
+
+The following two links explain this procedure, as well as giving a shell script that automatically clones the bare repository
+and sets remote tracking branches for the git fetch origin operation:
+https://morgan.cugerone.com/blog/how-to-use-git-worktree-and-in-a-clean-way/
+https://morgan.cugerone.com/blog/workarounds-to-git-worktree-using-bare-repository-and-cannot-fetch-remote-branches/
+
