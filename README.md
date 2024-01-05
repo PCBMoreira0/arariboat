@@ -32,9 +32,24 @@ https://morgan.cugerone.com/blog/how-to-use-git-worktree-and-in-a-clean-way/
 https://morgan.cugerone.com/blog/workarounds-to-git-worktree-using-bare-repository-and-cannot-fetch-remote-branches/
 
 Based on its contents, a powershell/bash script was created in order to facilitate the cloning of this repository.
-Place it on a folder within the PATH environment variables or create a new one, then call it following the instructions.
+Place it on a folder within the PATH environment variables or place the script on a local folder and call it from there.
 
-https://github.com/takamasanumuro/BareRepositoryCloner/tree/main
+For Windows:
+git-clone-bare-worktrees.ps1 https://github.com/takamasanumuro/arariboat.git
+
+For Linux:
+git-clone-bare-worktrees.sh https://github.com/takamasanumuro/arariboat.git
+
+After that, you can work on the desired branch by simply navigating to the corresponding folder.
+The followings commands can be used to build a working environment and upload the compiled binaries to the board.
+
+pio run --> Process all environments
+pio run -e [ENV-PLACEHOLDER] --> Process only the selected environment
+pio run -e [ENV-PLACEHOLDER] -t upload --> Build the selected environment and upload it to the board
+pio run -e [ENV-PLACEHOLDER] --upload-port [PORT-PLACEHOLDER] -t upload && pio device monitor -b [BAUDRATE-PLACEHOLDER] -p [PORT-PLACEHOLDER] --> Best way to build, upload and monitor if multiple devices are connected at same time
+pio device monitor -b [BAUDRATE-PLACEHOLDER] --> Opens a serial monitor with the specified baud rate. Port is automatically detected if only one board is plugged in.
+pio device monitor -b [BAUDRATE-PLACEHOLDER] -p [PORT-PLACEHOLDER] --> Opens a serial monitor with specified baud rate and port
+pio device list --> Shows available serial ports
 
 
 
