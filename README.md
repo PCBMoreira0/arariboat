@@ -44,11 +44,17 @@ After that, you can work on the desired branch by simply navigating to the corre
 The followings commands can be used to build a working environment and upload the compiled binaries to the board.
 
 pio run --> Process all environments
+
 pio run -e [ENV-PLACEHOLDER] --> Process only the selected environment
+
 pio run -e [ENV-PLACEHOLDER] -t upload --> Build the selected environment and upload it to the board
+
 pio run -e [ENV-PLACEHOLDER] --upload-port [PORT-PLACEHOLDER] -t upload && pio device monitor -b [BAUDRATE-PLACEHOLDER] -p [PORT-PLACEHOLDER] --> Best way to build, upload and monitor if multiple devices are connected at same time
+
 pio device monitor -b [BAUDRATE-PLACEHOLDER] --> Opens a serial monitor with the specified baud rate. Port is automatically detected if only one board is plugged in.
+
 pio device monitor -b [BAUDRATE-PLACEHOLDER] -p [PORT-PLACEHOLDER] --> Opens a serial monitor with specified baud rate and port
+
 pio device list --> Shows available serial ports
 
 
