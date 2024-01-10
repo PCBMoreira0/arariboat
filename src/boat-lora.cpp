@@ -629,8 +629,9 @@ void DisplayScreenTask(void* parameter) {
 }
 
 /// @brief Receives Mavlink messages from the routing queue and transmits them via LoRa.
+/// Make sure to have an antenna connected to the LoRa module before transmitting, otherwise the module might be damaged.
 /// @param parameter 
-void LoraTransmissionTask(void* parameter) {
+void LoRaTransmitterTask(void* parameter) {
 
     while (true) {
         mavlink_message_t heartbeat_msg;
@@ -697,7 +698,7 @@ void StartLora() {
 
 void setup() {
 
-    Serial.begin(4800);
+    Serial.begin(4800); //Lower the baud rate for long cable lengths, as well as to prevent possible switching noise.
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
     StartLora();
@@ -705,7 +706,7 @@ void setup() {
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     //xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(SerialChannelReaderTask, "serialReader", 4096, NULL, 3, NULL);
-    xTaskCreate(LoraTransmissionTask, "loraTransmission", 4096, NULL, 1, NULL);
+    xTaskCreate(LoRaTransmitterTask, "loraTransmission", 4096, NULL, 1, NULL);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 void loop() {
