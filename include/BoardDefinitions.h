@@ -1,11 +1,8 @@
 #include <Arduino.h>
+
+#ifdef SCREEN_ENABLED
 #include <Wire.h> 
 #include "SSD1306Wire.h" 
-
-//LORA_V1_6_OLED + SDCard + SX1276 LoRa
-#define LORA_V1_6_OLED  1
-#define LORA_PERIOD 915     
-#define SYNC_WORD 0xFE
 
 // TFT display with I2C interface
 #define OLED_CLASS_OBJ  SSD1306Wire
@@ -14,7 +11,14 @@
 #define OLED_SCL    22
 #define OLED_RST    -1
 
-// Pins for SX1276 LoRa modem
+#endif
+
+//LORA_V1_6_OLED + SDCard + SX1276 LoRa
+#define LORA_V1_6_OLED  1
+#define LORA_PERIOD 915     
+#define SYNC_WORD 0xFE
+
+// SPI pins to communicate with SX1276 LoRa modem's configuration registers and FIFO buffer
 #define CONFIG_MOSI 27
 #define CONFIG_MISO 19
 #define CONFIG_CLK  5

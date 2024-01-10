@@ -2,3 +2,4 @@
 .vscode
 logs/
 monitor/__pycache__/
+src/test.cpp
