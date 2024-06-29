@@ -8,7 +8,7 @@
 #include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
 #include "DallasTemperature.h" // For the DS18B20 temperature probes.
 #include "TinyGPSPlus.h" // GPS NMEA sentence parser.
-#include "arariboat\mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
+#include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 #include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain amplifier Analog-Digital Converter for measuring current and voltage.
 #include <SPI.h> // Required for the ADS1115 ADC.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
@@ -78,13 +78,12 @@ TaskHandle_t temperatureReaderTaskHandle = nullptr;
 TaskHandle_t gpsReaderTaskHandle = nullptr;
 TaskHandle_t instrumentationReaderTaskHandle = nullptr;
 TaskHandle_t auxiliaryReaderTaskHandle = nullptr;
-TaskHandle_t encoderControlTaskHandle = nullptr;
 TaskHandle_t highWaterMeasurerTaskHandle = nullptr;
 
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
 TaskHandle_t* taskHandles[] = { &ledBlinkerTaskHandle, &wifiConnectionTaskHandle, &serverTaskHandle, &vpnConnectionTaskHandle, &serialReaderTaskHandle, 
                                 &temperatureReaderTaskHandle, &gpsReaderTaskHandle, &instrumentationReaderTaskHandle, 
-                                &auxiliaryReaderTaskHandle, &encoderControlTaskHandle, &highWaterMeasurerTaskHandle};
+                                &auxiliaryReaderTaskHandle, &highWaterMeasurerTaskHandle};
 
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
@@ -600,232 +599,6 @@ void GpsReaderTask(void* parameter) {
 }
 
 
-float CalculateVoltagePrimaryResistor(const float pin_voltage, const float sensor_output_ratio, const int32_t primary_resistance, const int32_t burden_resistance);
-float CalculateInputVoltage(const float voltage_primary_resistor_drop, const float primary_voltage_divider_ratio);
-float LinearCorrection(const float input_value, const float slope, const float intercept);
-float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ratio, const int32_t burden_resistance);
-float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistance);
-void InstrumentationReaderTask(void* parameter) {
-
-     // The ADS1115 is a Delta-sigma (ΔΣ) ADC, which is based on the principle of oversampling. The input
-    // signal of a ΔΣ ADC is sampled at a high frequency (modulator frequency) and subsequently filtered and
-    // decimated in the digital domain to yield a conversion result at the respective output data rate.
-    // The ratio between modulator frequency and output data rate is called oversampling ratio (OSR). By increasing the OSR, and thus
-    // reducing the output data rate, the noise performance of the ADC can be optimized. In other words, the input-
-    // referred noise drops when reducing the output data rate because more samples of the internal modulator are
-    // averaged to yield one conversion result. Increasing the gain, therefore reducing the input voltage range, also reduces the input-referred noise, which is
-    // particularly useful when measuring low-level signals
-
-    // The use of an external ADC, the ADS1115, was chosen to obtain higher resolution and linearity, as well as programmable gain to avoid the need for instrumentation amplifiers.
-    // The ADS1115 is a 16-bit ADC with 4 channels. It is used to read the voltage of the battery and the current of motor, the MPPT output and the battery current or auxiliary system current.
-    // The ADS1115 has 4 addresses, which are determined by the state of the ADDR pin. Our board has a solder bridge that allows selection between 0x48 and 0x49.
-    // The ADS1115 is connected to the ESP32 via I2C. The ESP32 is the master and the ADS1115 is the slave. It uses the default Wire instance at pins 21(SDA) and 22(SCL) for communication.
-
-
-    // Make sure that the ADS1115 is connected to the ESP32 via I2C and that the solder bridge is set to the correct address.
-    // A common ground is also required between the ESP32 and the ADS1115, which is given when the ESP32 is powered by the same battery as the ADS1115,
-    // but not when the ESP32 is powered by the USB port during tests on the laboratory workbench. In this case, the ground of the ESP32 and the ADS1115
-    // must be explictly connected together for the I2C communication to work. If the ADS1115 is not detected, check continuity of the wires with multimeter.
-    
-    Adafruit_ADS1115 adc; 
-    constexpr uint8_t adc_addresses[] = {0x48, 0x49}; // Address is determined by a solder bridge on the instrumentation board.
-    adc.setGain(GAIN_FOUR); // Configuring the PGA( Programmable Gain Amplifier) to amplify the signal by 4 times, so that the maximum input voltage is +/- 1.024V
-    adc.setDataRate(RATE_ADS1115_16SPS); // Setting a low data rate to increase the oversampling ratio of the ADC and thus reduce the noise.
-    
-    bool is_adc_initialized = false;
-    
-    while (!is_adc_initialized) {
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite); // Blinks the LED to indicate that the ADC is not initialized yet.
-        for (auto address : adc_addresses) {
-            Serial.printf("\n[ADS]Trying to initialize ADS1115 at address 0x%x\n", address);
-            if (adc.begin(address)) {
-                Serial.printf("\n[ADS]ADS1115 successfully initialized at address 0x%x\n", address);
-                is_adc_initialized = true;
-                xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite); // Return LED to default blink rate.
-                break;
-            }
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-    }
-    
-    while (true) {
-        // Check and confirm which values of resistors are being used on the board.
-        // Values associated with the voltage sensor.
-        constexpr float voltage_conversion_ratio = 2.59081f; // Datasheet gives a reference value of 2.50, but here it is being used an iterative process to find a value that satisfies the conversion measurements.
-        constexpr int32_t voltage_primary_resistance = 4700; // Resistor connected to primary side of LV-20P voltage sensor.
-        constexpr int32_t voltage_primary_coil_resistance = 250; // Resistance of the primary coil of the LV-20P voltage sensor.
-        constexpr float primary_voltage_divider_ratio  = (float)voltage_primary_coil_resistance / voltage_primary_resistance;
-        constexpr int32_t voltage_burden_resistance = 33; // Burden resistor connected to secondary side of LV-20P voltage sensor.
-
-        // Values associated with current sensors.
-        constexpr int32_t selected_full_scale_range = 100; // Selected full scale range of the T201 current sensor.
-        constexpr float current_conversion_ratio = 0.001f; // Output Conversion ratio of the LA55-P current sensor.
-        constexpr int32_t motor_burden_resistance = 22;
-        constexpr int32_t battery_burden_resistance = 22;
-        constexpr int32_t mppt_burden_resistance = 10; 
-
-        // In the ADS1115 single ended measurements have 15 bits of resolution. Only differential measurements have 16 bits of resolution.
-        // As we are using the 4 analog inputs for each of the 4 sensors, single ended measurements are being used in order to access all 4 sensors.
-        // When using single ended mode, the maximum output code is 0x7FFF(32767), which corresponds to the full-scale input voltage.
-
-        float voltage_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(0));
-        float current_motor_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(1));
-        float current_battery_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(2));
-        float current_mppt_pin_voltage = adc.computeVolts(adc.readADC_SingleEnded(3));
-        //DEBUG_PRINTF("\n[Instrumentation-PIN-VOLTAGE]Battery voltage: %f, Motor voltage: %f, Battery voltage: %f, MPPT voltage: %f\n", voltage_battery_pin_voltage, current_motor_pin_voltage, current_battery_pin_voltage, current_mppt_pin_voltage);
-
-        // Calibrate the voltage by comparing the value of voltage_primary_resistor_drop variable against the actual voltage drop on the primary resistor using a multimeter. 
-        // Take multiple readings across different voltages and do a linear regression to find the slope and intercept.
-        float voltage_primary_resistor_drop = CalculateVoltagePrimaryResistor(voltage_battery_pin_voltage, voltage_conversion_ratio, voltage_primary_resistance, voltage_burden_resistance);
-        float voltage_battery = CalculateInputVoltage(voltage_primary_resistor_drop, primary_voltage_divider_ratio);
-        float calibrated_voltage_battery = LinearCorrection(voltage_battery, 1.0025059f, 0.0f);
-        
-        float current_motor = CalculateCurrentT201(current_motor_pin_voltage, selected_full_scale_range, motor_burden_resistance);
-        float current_battery = CalculateCurrentT201(current_battery_pin_voltage, selected_full_scale_range, battery_burden_resistance);
-        float current_mppt = CalculateCurrentLA55(current_mppt_pin_voltage, current_conversion_ratio, mppt_burden_resistance);
-        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Instrumentation) {
-            DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
-                            "[Instrumentation]Battery: %fV\n"
-                            "[Instrumentation]Calibrated battery: %fV\n"
-                            "[Instrumentation]Motor current: %fV\n"
-                            "[Instrumentation]Battery current: %fV\n"
-                            "[Instrumentation]MPPT current: %fV\n",
-            voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
-        }
-
-        SystemData::getInstance().instrumentation.voltage_battery = calibrated_voltage_battery;
-        SystemData::getInstance().instrumentation.current_zero = current_motor;
-        SystemData::getInstance().instrumentation.current_one = current_battery;
-        SystemData::getInstance().instrumentation.current_two = current_mppt;
-
-        // Prepare and send Mavlink message
-        mavlink_message_t message;
-        mavlink_instrumentation_t instrumentation = {
-            .current_zero = current_motor,
-            .current_one = current_battery,
-            .current_two = current_mppt,
-            .voltage_battery = calibrated_voltage_battery
-        };
-        
-        mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);
-        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-        uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-        Serial.write(buffer, len);
-
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
-        vTaskDelay(pdMS_TO_TICKS(8000));
-    }
-}
-
-/// @brief Calculates the voltage drop across the primary resistor for a LV-20P voltage sensor, from which the input voltage can be later calculated.
-/// @param pin_voltage Voltage at corresponding pin of ADS1115.
-/// @param primary_resistance Value of resistor connected to primary side of LV-20P voltage sensor. It should be rated for 10mA for nominal RMS voltage being measured, therefore 14mA is the allowed peak current.
-/// @param burden_resistance Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
-/// @param sensor_output_ratio 2.50 is a nominal ratio given by the datasheet. Both resistors and the sensor have tolerances, but, by assuming the resistors are accurate,
-/// the sensor output ratio can be varied to calibrate the voltage measurement.
-/// @return Voltage drop across primary resistor of LV-20P voltage sensor.
-float CalculateVoltagePrimaryResistor(const float pin_voltage, const float sensor_output_ratio, const int32_t primary_resistance, const int32_t burden_resistance) {
-    
-    return pin_voltage * primary_resistance / (burden_resistance * sensor_output_ratio);
-}
-
-/// @brief Calculates the input voltage for a LV-20P voltage sensor given the voltage drop across the primary resistor.
-/// @param voltage_primary_resistor_drop Voltage drop across primary resistor of LV-20P voltage sensor.
-/// @param primary_voltage_divider_ratio Ratio between the primary coil resistance and the resistance connected to the primary side of LV-20P voltage sensor.
-/// @return Input voltage at primary side of LV-20P voltage sensor.
-float CalculateInputVoltage(const float voltage_primary_resistor_drop, const float primary_voltage_divider_ratio) {
-    
-    return voltage_primary_resistor_drop + voltage_primary_resistor_drop * primary_voltage_divider_ratio;
-}
-
-/// @brief Calculates the input current for a LA-55P current sensor.
-/// @param pin_voltage Voltage at corresponding pin of ADS1115.
-/// @param burden_resistance Value of resistor connected to secondary side of LV-55P current sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
-/// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
-/// @return Input current at primary side of LA-55P current sensor.
-float CalculateCurrentLA55(const float pin_voltage, const float sensor_output_ratio, const int32_t burden_resistance) {
-    
-    return pin_voltage / (burden_resistance * sensor_output_ratio);
-}
-
-/// @brief Calculates the input current for a Seneca T201DC 4-20mA loop current sensor by using a linear equation.
-/// The 4-20mA loop works by outputting 4mA for zero input and 20mA for full scale input, which get multiplied by the burden resistor to create a voltage drop that is measured by the ADS1115.
-/// It has 4 switches. One to set bipolar mode (AC current or reverse current), two bit switches to set the measurement scale and one switch to set damping on or off.
-/// By default monopolar mode and no damping are being used for the boat.
-/// @param pin_voltage Voltage at corresponding pin of ADS1115.
-/// @param burden_resistance Value of resistor connected to secondary side of LV-20P voltage sensor. Current through this resistor creates a voltage drop that is measured by the ADS1115. Low gain is preferred to reduce noise.
-/// @param sensor_output_ratio Current ratio between secondary and primary side of LV-20P voltage sensor. Given by datasheet.
-/// @return Input current at primary side of LA-55P current sensor.
-float CalculateCurrentT201(const float pin_voltage, const float selected_full_scale_range, const int32_t burden_resistance) {
-    
-    // Calculates the slope and intercept of the linear equation that relates input current to output voltage.
-    const float zero_input_voltage = 4.0f * burden_resistance * 0.001f; // 4mA * burden resistor
-    const float full_input_voltage = 20.0f * burden_resistance * 0.001f; // 20mA * burden resistor
-    const float zero_input_current = 0.0f;
-    const float full_input_current = selected_full_scale_range;
-    const float slope = (full_input_current - zero_input_current) / (full_input_voltage - zero_input_voltage);
-    const float intercept = zero_input_current - slope * zero_input_voltage;
-    return slope * pin_voltage + intercept;
-}
-
-/// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
-/// @param input 
-/// @param slope 
-/// @param intercept 
-/// @return Calibrated reading
-float LinearCorrection(const float input_value, const float slope, const float intercept) {
-    return slope * input_value + intercept;
-}
-
-void EncoderControl(void* parameter) {
-    
-    constexpr uint8_t dac_pin = 25;
-    constexpr uint8_t power_pin = 27;
-    constexpr uint8_t dataPin = 14;
-    constexpr uint8_t clockPin = 12;
-
-    Encoder encoder(clockPin, dataPin);
-    pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH);
- 
-    static int32_t previousPosition = 0;
-    constexpr uint8_t dac_resolution = 255; // 8-bit DAC
-    constexpr uint8_t max_number_steps = 50;
-    constexpr int16_t max_dac_output_voltage = 3300; // mV
-    constexpr int16_t max_dac_amplified_output_voltage = 5000; // mV
-    
-    static uint32_t print_timer = 0;
-    static uint32_t can_print_timer = 0;;
-    static bool can_print = false;
-    encoder.readAndReset(); // Reset encoder position to zero.
-  
-    while (true) {
-        int32_t currentPosition = encoder.read();
-        currentPosition = constrain(currentPosition, 0, max_number_steps);
-        if (currentPosition != previousPosition) {
-            previousPosition = currentPosition;
-            can_print_timer = millis();
-            can_print = true;
-            uint8_t discrete_output = currentPosition * dac_resolution / max_number_steps;
-            dacWrite(dac_pin, discrete_output);
-            SystemData::getInstance().controlSystem.dac_output = (float)discrete_output * max_dac_amplified_output_voltage / dac_resolution;
-        }
-
-        if ((millis() - can_print_timer > 2000) && can_print) {
-            can_print_timer = millis();
-            can_print = false;
-        }
-
-        if ((millis() - print_timer > 500) && can_print) {
-            print_timer = millis();
-            Serial.printf("\n[DAC]Encoder position: %d%%\n", currentPosition * 100 / max_number_steps);
-            Serial.printf("[DAC] output: %d mV\n", currentPosition * max_dac_output_voltage / max_number_steps);
-            Serial.printf("[DAC] amplified output: %d mV\n", currentPosition * max_dac_amplified_output_voltage / max_number_steps);
-        }
-
-        vTaskDelay(5);
-    }
-}
-
 /// @brief Auxiliary task that reads the battery voltage and state of pumps.
 /// @param parameter 
 void AuxiliaryReaderTask(void* parameter) {
@@ -1004,9 +777,11 @@ void StackHighWaterMeasurerTask(void* parameter) {
     }
 }
 
+extern void InstrumentationReaderTask(void* parameter);
+
 void setup() {
 
-    Serial.begin(4800);
+    Serial.begin(9600);
     Wire.begin(); // Master mode
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     //xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
@@ -1015,9 +790,8 @@ void setup() {
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     //xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     //xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
-    //xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
-    xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
-    xTaskCreate(EncoderControl, "encoderControl", 4096, NULL, 1, &encoderControlTaskHandle);
+    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
+    //xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
