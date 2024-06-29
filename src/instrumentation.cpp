@@ -65,7 +65,7 @@ void InstrumentationReaderTask(void* parameter) {
         float voltage_battery = LinearCorrection(adc.readADC_SingleEnded(0), 0.002472f, 0.801442);
 
         adc.setGain(GAIN_EIGHT);
-        float current_port = LinearCorrection(adc.readADC_SingleEnded(1), 0.0005653f, -56.366843f);
+        float current_port = LinearCorrection(adc.readADC_SingleEnded(1), 0.005653f, -56.366843f);
 
         adc.setGain(GAIN_EIGHT);
         float current_starboard = LinearCorrection(adc.readADC_SingleEnded(2), 0.005627f, -56.204637f);
@@ -73,10 +73,10 @@ void InstrumentationReaderTask(void* parameter) {
         adc.setGain(GAIN_EIGHT);
         float current_mppt = LinearCorrection(adc.readADC_SingleEnded(3), 0.001602f, 0.015848f);
 
-        Serial.printf("\n[Instrumentation]Battery voltage: %fV\n"
-                      "[Instrumentation]Port current: %fA\n"
-                      "[Instrumentation]Starboard current: %fA\n"
-                      "[Instrumentation]MPPT current: %fA\n",
+        Serial.printf("\n[Instrumentation]Battery voltage: %.2fV\n"
+                      "[Instrumentation]Port current: %.2fA\n"
+                      "[Instrumentation]Starboard current: %.2fA\n"
+                      "[Instrumentation]MPPT current: %.2fA\n",
                       voltage_battery, current_port, current_starboard, current_mppt);
         
         /*
@@ -96,13 +96,15 @@ void InstrumentationReaderTask(void* parameter) {
         SystemData::getInstance().instrumentation.current_one = current_battery;
         SystemData::getInstance().instrumentation.current_two = current_mppt;
 
+        
+
         // Prepare and send Mavlink message
         mavlink_message_t message;
         mavlink_instrumentation_t instrumentation = {
-            .current_zero = current_motor,
-            .current_one = current_battery,
+            .current_zero = current_port,
+            .current_one  = current_starboard,
             .current_two = current_mppt,
-            .voltage_battery = calibrated_voltage_battery
+            .voltage_battery = voltage_battery
         };
         
         mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);

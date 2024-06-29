@@ -447,91 +447,6 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
     }
 }
 
-void DallasDeviceScanIndex(DallasTemperature& sensors);
-void TemperatureReaderTask(void* parameter) {
-
-    constexpr uint8_t power_pin = 2; // GPIO used to power the temperature probes
-    constexpr uint8_t temperature_bus_pin = 15; // GPIO used for OneWire communication
-    
-    pinMode(power_pin, OUTPUT); digitalWrite(power_pin, HIGH); // Set power pin to HIGH to power the temperature probes
-    OneWire one_wire(temperature_bus_pin); // Setup a one_wire instance to communicate with any devices that use the OneWire protocol
-    DallasTemperature sensors(&one_wire); // Pass our one_wire reference to Dallas Temperature sensor, which uses the OneWire protocol.
-    
-    // Each probe has a unique 8-byte address. Use the scanIndex method to initially find the addresses of the probes. 
-    // Then hardcode the addresses into the program. This is done to avoid the overhead of scanning for the addresses every time the function is called.
-    // You should then physically label the probes with tags or stripes as to differentiate them.
-    DeviceAddress thermal_probe_zero = {0x28, 0x86, 0x1C, 0x07, 0xD6, 0x01, 0x3C, 0x8C};
-    DeviceAddress thermal_probe_one = { 0 }; 
-
-    while (true) {
-        sensors.requestTemperatures(); // Send the command to update temperature readings
-        float temperature_motor = sensors.getTempC(thermal_probe_zero);
-        float temperature_mppt = sensors.getTempC(thermal_probe_one);
-
-        #ifdef DEBUG_PRINTF
-        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Temperature) {
-            if (temperature_motor == DEVICE_DISCONNECTED_C) {
-                DEBUG_PRINTF("\n[Temperature][%x]Motor: Device disconnected\n", thermal_probe_zero[0]);
-            } else {
-                DEBUG_PRINTF("\n[Temperature][%x]Motor: %f\n", thermal_probe_zero[0], temperature_motor); // [Temperature][First byte of probe address] = value is the format
-            }
-
-            if (temperature_mppt == DEVICE_DISCONNECTED_C) {
-                DEBUG_PRINTF("\n[Temperature][%x]MPPT: Device disconnected\n", thermal_probe_one[0]);
-            } else {
-                DEBUG_PRINTF("\n[Temperature][%x]MPPT: %f\n", thermal_probe_one[0], temperature_mppt);
-            }
-        }
-        #endif
-
-        // Prepare and send a mavlink message
-        mavlink_message_t message;
-        mavlink_temperatures_t temperatures = {
-            .temperature_motor = temperature_motor,
-            .temperature_mppt = temperature_mppt
-        };
-        mavlink_msg_temperatures_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &temperatures);
-        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-        uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-        Serial.write(buffer, len);
-
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Notify the LED blinker task to blink the LED
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10000))) { // Wait for notification from serial reader task to scan for new probes
-            DallasDeviceScanIndex(sensors); 
-        }
-    }
-}
-
-/// @brief Auxiliary function to print the 8-byte address of a Dallas Thermal Probe to the serial port
-/// @param device_address 
-void PrintProbeAddress(DeviceAddress device_address) {
-
-    uint8_t device_address_length = 8; // The length of the device address is 8 bytes
-    for (uint8_t i = 0; i < device_address_length; i++) { // Loop through each byte in the eight-byte address
-        if (device_address[i] < 15) Serial.print("0"); // If byte is less than 0x10, add a leading zero to maintain 2-digit format
-        Serial.print(device_address[i], HEX);
-    }
-    Serial.printf("\n");
-}
-
-/// @brief Scans for Dallas Thermal Probes and prints their addresses to the serial port
-/// After adding a new probe, run this function to find the address of the probe. Then hardcode the address into the program
-/// for faster performance.
-/// @param sensors 
-void DallasDeviceScanIndex(DallasTemperature &sensors) {
-    sensors.begin(); // Scan for devices on the OneWire bus.
-    Serial.printf("\nFound %d devices\n", sensors.getDeviceCount());
-    for (uint8_t i = 0; i < sensors.getDeviceCount(); i++) {
-        DeviceAddress device_address;
-        if (!sensors.getAddress(device_address, i)) {
-            Serial.printf("Unable to find address for Device %d\n", i);
-        } else {
-            Serial.printf("Device %d Address: \n", i);
-            PrintProbeAddress(device_address);
-        }
-    }
-}
-
 void GpsReaderTask(void* parameter) {
 
     // Example of latitude: 40.741895 (north is positive)
@@ -778,6 +693,7 @@ void StackHighWaterMeasurerTask(void* parameter) {
 }
 
 extern void InstrumentationReaderTask(void* parameter);
+extern void TemperatureReaderTask(void* parameter);
 
 void setup() {
 
@@ -788,9 +704,9 @@ void setup() {
     //xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
     //xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
-    //xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
+    xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     //xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
-    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
+    //xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
     //xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
