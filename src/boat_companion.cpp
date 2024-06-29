@@ -6,13 +6,9 @@
 #include "Husarnet.h" // IPV6 for ESP32 to enable peer-to-peer communication between devices inside a Husarnet network.
 #include "ESPAsyncWebServer.h" // Make sure to include Husarnet before this.
 #include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
-#include "DallasTemperature.h" // For the DS18B20 temperature probes.
 #include "TinyGPSPlus.h" // GPS NMEA sentence parser.
 #include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
-#include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain amplifier Analog-Digital Converter for measuring current and voltage.
-#include <SPI.h> // Required for the ADS1115 ADC.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
-#include <Encoder.h> // Rotary encoder library.
 #include <Preferences.h> // Non-volatile storage for storing the state of the boat.
 
 #define DEBUG // Uncomment to enable debug messages.
@@ -40,8 +36,6 @@ public:
         Temperature = 0b0000010000,
         Gps = 0b0000100000,
         Instrumentation = 0b0001000000,
-        Auxiliary = 0b0010000000,
-        Encoder = 0b0100000000,
         High_water = 0b1000000000,
         All = 0b1111111111
     };
@@ -77,13 +71,12 @@ TaskHandle_t serialReaderTaskHandle = nullptr;
 TaskHandle_t temperatureReaderTaskHandle = nullptr;
 TaskHandle_t gpsReaderTaskHandle = nullptr;
 TaskHandle_t instrumentationReaderTaskHandle = nullptr;
-TaskHandle_t auxiliaryReaderTaskHandle = nullptr;
 TaskHandle_t highWaterMeasurerTaskHandle = nullptr;
 
 // Array of pointers to the task handles. This allows to iterate over the array and perform operations on all tasks, such as resuming, suspending or reading free stack memory.
 TaskHandle_t* taskHandles[] = { &ledBlinkerTaskHandle, &wifiConnectionTaskHandle, &serverTaskHandle, &vpnConnectionTaskHandle, &serialReaderTaskHandle, 
-                                &temperatureReaderTaskHandle, &gpsReaderTaskHandle, &instrumentationReaderTaskHandle, 
-                                &auxiliaryReaderTaskHandle, &highWaterMeasurerTaskHandle};
+                                &temperatureReaderTaskHandle, &gpsReaderTaskHandle, &instrumentationReaderTaskHandle,
+                                &highWaterMeasurerTaskHandle};
 
 constexpr auto taskHandlesSize = sizeof(taskHandles) / sizeof(taskHandles[0]); // Get the number of elements in the array.
 
@@ -234,12 +227,6 @@ void ServerTask(void* parameter) {
         request->send(200, "text/html", "<h1>Boat32</h1><p>Latitude: " + String(latitude) + "</p><p>Longitude: " + String(longitude) + "</p>");
     });
 
-    server.on("/control-system", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Send control system data from singleton class
-        uint8_t pump_mask = SystemData::getInstance().controlSystem.pump_mask;
-        float dac_output = SystemData::getInstance().controlSystem.dac_output;
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Pump mask: " + String(pump_mask) + "</p><p>DAC output: " + String(dac_output) + "</p>");
-    });
 
     // Wait for notification from VPN connection task before starting the server.
     //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -420,24 +407,6 @@ void ProcessSerialMessage(const std::array<uint8_t, N> &buffer) {
             xTaskNotify(gpsReaderTaskHandle, value, eSetValueWithOverwrite);
             break;
         }
-
-        case 'C' : {
-            // Try to parse float to send current calibration value to auxiliary reader task
-            constexpr int16_t scale_factor = 1000; // Scale factor to convert float to fixed point representation
-            float calibration_value = 0.0f;
-            if (sscanf((const char*)&buffer[1], "%f", &calibration_value)) {
-                Serial.printf("\n[SERIAL-CALIBRATION] Value: %f\n", calibration_value);
-                calibration_value *= scale_factor;
-                xTaskNotify(auxiliaryReaderTaskHandle, (uint32_t)calibration_value, eSetValueWithOverwrite);
-            }
-            break;
-        }
-
-        case 'Q' : {
-            // Send notification to auxiliary reader to start calibration
-            xTaskNotify(auxiliaryReaderTaskHandle, 1, eSetValueWithOverwrite);
-            break;
-        }
         
         case '\r':
         case '\n':
@@ -513,169 +482,6 @@ void GpsReaderTask(void* parameter) {
     }
 }
 
-
-/// @brief Auxiliary task that reads the battery voltage and state of pumps.
-/// @param parameter 
-void AuxiliaryReaderTask(void* parameter) {
-    
-    // Read lead-acid battery and pumps voltage through 4k7-1k voltage divider.
-    constexpr uint8_t port_pump_pin = 36;
-    constexpr uint8_t starboard_pump_pin = 39;
-    constexpr uint8_t battery_voltage_pin = 34;
-    constexpr uint8_t battery_current_pin = 35;
-    constexpr float battery_voltage_divider_ratio = 1.0f / (4.7f + 1.0f); // Voltage divider ratio used to measure battery voltage.
-    constexpr float adc_reference_voltage = 3.3f;
-    constexpr uint16_t adc_resolution = 4095; // 12-bit ADC
-    constexpr float battery_max_voltage = 13.8f;
-    constexpr float battery_min_voltage = 11.8f;
-    constexpr float battery_max_voltage_divided = battery_max_voltage * battery_voltage_divider_ratio; 
-    constexpr float battery_min_voltage_divided = battery_min_voltage * battery_voltage_divider_ratio; 
-    constexpr uint16_t number_samples_filter = 9; // Number of samples to use in the moving average filter.
-    constexpr float pump_threshold_voltage = 10.0f; // Voltage at which the pump is considered to be on.
-
-    pinMode(battery_voltage_pin, INPUT);
-    pinMode(port_pump_pin, INPUT);
-    pinMode(starboard_pump_pin, INPUT);
-    pinMode(battery_current_pin, INPUT);
-
-    float battery_voltage = 0.0f;
-    float battery_current = 0.0f;
-    bool port_pump_voltage = 0.0f;
-    bool starboard_pump_voltage = 0.0f;
-
-    auto CalibrateCurrentSensor = [](uint8_t pin, float& offset_adc_reference, float& sensitivity_adc, bool& asked_to_calibrate) {
-        // By using non volatile memory, first obtain the calibration factor from the memory. If it is not set, then calibrate the sensor and save the calibration factor to the memory.;
-        // If the calibration factor is not set, then 50 readings are taken and averaged to obtain the average offset voltage when no current is flowing through the sensor.
-        // Then the user is asked to input the current flowing through the sensor for a new set of 50 readings to obtain the average sensitivity of the sensor.
-
-        Preferences preferences;
-        preferences.begin("aux", false);
-        constexpr float error_value = -1.0f;
-        offset_adc_reference = preferences.getFloat("offset", error_value); 
-        sensitivity_adc = preferences.getFloat("sensitivity", error_value); 
-
-        if ((offset_adc_reference < 0.0f || sensitivity_adc < 0.0f) || asked_to_calibrate) {
-
-            asked_to_calibrate = false;
-            auto previous_print_state = SystemData::getInstance().debug_print;
-            SystemData::getInstance().debug_print = SystemData::getInstance().debug_print_flags::Auxiliary;
-            Serial.printf("\n[AUX]Calibrating current sensor\n"
-                            "[AUX]Make sure that no current is flowing through the sensor during initialization\n"
-                            "[AUX]Press 'C' to continue\n");
-
-            // Suspend other tasks to avoid interference with the current sensor readings.
-            vTaskSuspend(instrumentationReaderTaskHandle);
-            vTaskSuspend(temperatureReaderTaskHandle);
-            vTaskSuspend(gpsReaderTaskHandle);
-            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);       
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-            
-            constexpr uint32_t number_samples = 400;
-            constexpr uint32_t sample_interval_ms = 10;
-
-            float offset_adc_sum = 0.0f;
-            for (uint32_t i = 0; i < number_samples; i++) {
-                offset_adc_sum += analogRead(pin);
-                vTaskDelay(pdMS_TO_TICKS(sample_interval_ms));
-            }
-            offset_adc_reference = offset_adc_sum / number_samples;
-            Serial.printf("\n[AUX]Offset adc: %.2f\n", offset_adc_reference);
-            Serial.printf(  "[AUX]Now turn on the current source and input the current passing through the sensor\n"
-                            "[AUX]Write it starting with a 'C' as in 'C2.00'\n ");
-            
-            uint32_t notification_value;
-            while (!xTaskNotifyWait(0, ULONG_MAX, &notification_value, 8000)) {
-                Serial.printf("\n[AUX]Please input the current flowing through the sensor starting with a 'C'\n");
-
-            }
-
-            constexpr int16_t scale_factor = 1000;
-            float current_sensor = (float)notification_value / scale_factor;
-            DEBUG_PRINTF("[AUX]CAL-Current: %.3f\n", current_sensor);
-
-            float measured_adc = 0.0f;
-            for (uint32_t i = 0; i < number_samples; i++) {
-                measured_adc += analogRead(pin);
-                vTaskDelay(pdMS_TO_TICKS(sample_interval_ms));
-            }
-            
-            measured_adc = measured_adc / number_samples;
-            sensitivity_adc = current_sensor / (measured_adc - offset_adc_reference);
-            Serial.printf("\n[AUX]Offset adc: %.3f\n", offset_adc_reference);
-            Serial.printf("[AUX]Measured adc: %.3f\n", measured_adc);
-            Serial.printf("[AUX]Sensitivity adc: %.3f\n", sensitivity_adc);
-            preferences.putFloat("offset", offset_adc_reference);
-            preferences.putFloat("sensitivity", sensitivity_adc);
-            preferences.end(); 
-            SystemData::getInstance().debug_print = previous_print_state;
-            vTaskResume(instrumentationReaderTaskHandle);
-            vTaskResume(temperatureReaderTaskHandle);
-            vTaskResume(gpsReaderTaskHandle);
-            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
-        }
-    };
-
-    /// @brief Read current using ACS712 current sensor.
-    /// @param power_voltage Voltage at the power pin of the ACS712 current sensor.
-    /// @param pin Pin connected to the output pin of the ACS712 current sensor.
-    /// @param sensitivity Sensitivity of the ACS712 current sensor, which is the rise in current per unit rise in adc value.
-    auto ReadBatteryCurrent = [](uint8_t pin, float calibrated_offset_adc, float calibrated_sensitivity) {
-       
-        // A higher number of samples is used here in order to stabilize the ADC readings before getting the value of the current.
-        // As the output current is very sensitive to the ADC readings, it is necessary to stabilize the ADC readings before getting the current
-        // instead of filtering the final output directly.
-
-        constexpr uint32_t number_samples_filter = 14;
-        static float measured_adc = analogRead(pin);
-        measured_adc = (measured_adc * number_samples_filter  + analogRead(pin)) / (number_samples_filter + 1); // Moving average filter.
-        float measured_current = (measured_adc - calibrated_offset_adc) * calibrated_sensitivity;
-        return measured_current;
-    };
-
-
-    static bool asked_to_calibrate = false;
-    constexpr float error_value = -1.0f;
-    float offset_adc_reference = error_value;
-    float sensitivity_adc = error_value;
-    CalibrateCurrentSensor(battery_current_pin, offset_adc_reference, sensitivity_adc, asked_to_calibrate);
-
-    while (true) {
-        float battery_voltage_reading = (analogRead(battery_voltage_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
-        battery_voltage = (battery_voltage_reading + battery_voltage * number_samples_filter) / (number_samples_filter + 1);
-
-        float battery_current_reading = ReadBatteryCurrent(battery_current_pin, offset_adc_reference, sensitivity_adc);
-        //battery_current = (battery_current_reading + battery_current * number_samples_filter) / (number_samples_filter + 1);
-        battery_current = battery_current_reading;
-
-        float port_pump_voltage_reading = (analogRead(port_pump_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
-        port_pump_voltage = (port_pump_voltage_reading + port_pump_voltage * number_samples_filter) / (number_samples_filter + 1);
-
-        float starboard_pump_voltage_reading = (analogRead(starboard_pump_pin) * adc_reference_voltage) / (adc_resolution * battery_voltage_divider_ratio);
-        starboard_pump_voltage = (starboard_pump_voltage_reading + starboard_pump_voltage * number_samples_filter) / (number_samples_filter + 1);
-
-        bool is_port_pump_on = port_pump_voltage_reading > pump_threshold_voltage;
-        bool is_starboard_pump_on = starboard_pump_voltage_reading > pump_threshold_voltage;
-
-        SystemData::getInstance().controlSystem.pump_mask = (is_port_pump_on << 1) | is_starboard_pump_on;
-
-        static uint32_t print_timer = 0;
-        if (millis() - print_timer > 3000) {
-            print_timer = millis();
-            if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Auxiliary) {
-                DEBUG_PRINTF("\n[AUX]Battery voltage: %.2fV\n", battery_voltage);
-                DEBUG_PRINTF("[AUX]Battery current: %.2fA\n", battery_current);
-                DEBUG_PRINTF("[AUX]Port pump: %s\n", is_port_pump_on ? "ON" : "OFF");
-                DEBUG_PRINTF("[AUX]Starboard pump: %s\n", is_starboard_pump_on ? "ON" : "OFF");
-            }
-        }
-
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(75))) {
-            asked_to_calibrate = true;
-            CalibrateCurrentSensor(battery_current_pin, offset_adc_reference, sensitivity_adc, asked_to_calibrate);
-        }
-    }
-}
-
 /// @brief Auxiliary task to measure free stack memory of each task and free heap of the system.
 /// Useful to detect possible stack overflows on a task and allocate more stack memory for it if necessary.
 /// @param parameter Unused. Just here to comply with the task function signature.
@@ -707,7 +513,6 @@ void setup() {
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     //xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
     //xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
-    //xTaskCreate(AuxiliaryReaderTask, "auxiliaryReader", 4096, NULL, 1, &auxiliaryReaderTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
