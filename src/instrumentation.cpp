@@ -2,6 +2,8 @@
 #include "Adafruit_ADS1X15.h" // 16-bit high-linearity with programmable gain amplifier Analog-Digital Converter for measuring current and voltage.
 #include <SPI.h> // Required for the ADS1115 ADC.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
+#include "Utilities.hpp" // Custom utility macros and functions.
+#include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 
 typedef Adafruit_ADS1115 ADS1115; // Alias for the ADS1115 class.
 
@@ -97,23 +99,22 @@ void InstrumentationReaderTask(void* parameter) {
         SystemData::getInstance().instrumentation.current_two = current_mppt;
 
         
+        */
 
         // Prepare and send Mavlink message
         mavlink_message_t message;
         mavlink_instrumentation_t instrumentation = {
-            .current_zero = current_port,
-            .current_one  = current_starboard,
-            .current_two = current_mppt,
-            .voltage_battery = voltage_battery
+            .battery_voltage = voltage_battery,
+            .motor_current = current_starboard,
+            .battery_current = current_port,
+            .mppt_current = current_mppt,
         };
         
         mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);
         uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
         uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
         Serial.write(buffer, len);
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite); // Blink LED to indicate that a message has been sent.
-        */
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(4000));
     }
 }
 

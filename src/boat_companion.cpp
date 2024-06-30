@@ -10,13 +10,14 @@
 #include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
 #include <Preferences.h> // Non-volatile storage for storing the state of the boat.
+#include "Utilities.hpp" // Custom utility macros and functions.
 
-#define DEBUG // Uncomment to enable debug messages.
-#ifdef DEBUG
-#define DEBUG_PRINTF(message, ...) Serial.printf(message, __VA_ARGS__)
-#else
-#define DEBUG_PRINTF(message, ...)
-#endif
+//TODO: Improve server interface for configuration and debug purposes.
+//TODO: Implement auxiliary battery and pumps readings using some I2C system
+//TODO: Send data directly to InfluxDB instead of using Husarnet
+//TODO: Save all measurements to a file in the SPIFFS file system or some microSD card
+//TODO: Use IDF event loop for serial parsing and intertask communication
+//TODO: Implement RPM measurements code
 
 // Singleton class for storing system-data that needs to be accessed by multiple tasks.
 class SystemData {
@@ -53,7 +54,7 @@ private:
         gps = { 0 };
         temperature = { 0 };
         controlSystem = { 0 };
-    }
+    };
     SystemData(SystemData const&) = delete; // Delete copy constructor.
     SystemData& operator=(SystemData const&) = delete; // Delete assignment operator.
     SystemData(SystemData&&) = delete; // Delete move constructor.
@@ -213,10 +214,10 @@ void ServerTask(void* parameter) {
 
     server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Send system instrumentation data from singleton class
-        float current_motor = SystemData::getInstance().instrumentation.current_zero;
-        float current_battery = SystemData::getInstance().instrumentation.current_one;
-        float current_mppt = SystemData::getInstance().instrumentation.current_two;
-        float voltage_battery = SystemData::getInstance().instrumentation.voltage_battery;
+        float current_motor = SystemData::getInstance().instrumentation.motor_current;
+        float current_battery = SystemData::getInstance().instrumentation.battery_current;
+        float current_mppt = SystemData::getInstance().instrumentation.mppt_current;
+        float voltage_battery = SystemData::getInstance().instrumentation.battery_voltage;
         request->send(200, "text/html", "<h1>Boat32</h1><p>Current motor: " + String(current_motor) + "</p><p>Current battery: " + String(current_battery) + "</p><p>Current MPPT: " + String(current_mppt) + "</p><p>Voltage battery: " + String(voltage_battery) + "</p>");
     });
     
@@ -512,7 +513,7 @@ void setup() {
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     //xTaskCreate(GpsReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
-    //xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
+    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
     //xTaskCreate(StackHighWaterMeasurerTask, "measurer", 2048, NULL, 1, NULL);  
 }
 
