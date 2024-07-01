@@ -3,7 +3,7 @@
 #include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 #include "Utilities.hpp" // Custom utility macros and functions.
 
-//TODO: Create a heating system to calibrate the temperature probes
+//TODO: Create a heating system to calibrate the temperature probes using thermocouples
 //TODO: Make attaching new probes more dynamic instead of hardcoded. Maybe use a config file to store the addresses of the probes.
 
 /// @brief Auxiliary function to print the 8-byte address of a Dallas Thermal Probe to the serial port

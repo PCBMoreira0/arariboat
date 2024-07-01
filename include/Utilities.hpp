@@ -1,5 +1,7 @@
 #include "data.hpp" // Singleton class for storing system-data that needs to be accessed by multiple tasks.
 #include "event_loop.hpp" //Event loop to handle events between tasks. This allows tasks to communicate with each other with loosely coupled code.
+#include "logger.hpp" // Logger class for logging messages at a specified interval.
+
 //*********************************************************/
 #define DEBUG // Uncomment to enable debug messages globally/
 //*********************************************************/
@@ -21,6 +23,7 @@ extern void SerialReaderTask(void* parameter);
 extern void TemperatureReaderTask(void* parameter);
 extern void GPSReaderTask(void* parameter);
 extern void InstrumentationReaderTask(void* parameter);
+extern void TimeReaderTask(void* parameter);
 
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
@@ -28,13 +31,14 @@ extern void InstrumentationReaderTask(void* parameter);
 // Each handle is then assigned to the task created in the setup() function.
 
 extern TaskHandle_t ledBlinkerTaskHandle;
-extern TaskHandle_t wifiConnectionTaskHandle;
+extern TaskHandle_t wifiTaskHandle;
 extern TaskHandle_t serverTaskHandle;
-extern TaskHandle_t vpnConnectionTaskHandle;
+extern TaskHandle_t VPNTaskHandle;
 extern TaskHandle_t serialReaderTaskHandle;
 extern TaskHandle_t temperatureReaderTaskHandle;
 extern TaskHandle_t gpsReaderTaskHandle;
 extern TaskHandle_t instrumentationReaderTaskHandle;
+extern TaskHandle_t timeReaderTaskHandle;
 
 enum BlinkRate : uint32_t {
     Slow = 2000,

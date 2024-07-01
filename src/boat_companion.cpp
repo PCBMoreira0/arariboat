@@ -23,13 +23,14 @@
 // Each handle is then assigned to the task created in the setup() function.
 
 TaskHandle_t ledBlinkerTaskHandle = nullptr;
-TaskHandle_t wifiConnectionTaskHandle = nullptr;
+TaskHandle_t wifiTaskHandle = nullptr;
 TaskHandle_t serverTaskHandle = nullptr;
-TaskHandle_t vpnConnectionTaskHandle = nullptr;
+TaskHandle_t VPNTaskHandle = nullptr;
 TaskHandle_t serialReaderTaskHandle = nullptr;
 TaskHandle_t temperatureReaderTaskHandle = nullptr;
 TaskHandle_t gpsReaderTaskHandle = nullptr;
 TaskHandle_t instrumentationReaderTaskHandle = nullptr;
+TaskHandle_t timeReaderTaskHandle = nullptr;
 
 void setup() {
 
@@ -38,13 +39,14 @@ void setup() {
 
     Wire.begin(); // I2C master mode to communicate with the ADS1115 ADC
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
-    //xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionTaskHandle);
-    //xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &vpnConnectionTaskHandle);
+    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
+    //xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &VPNTaskHandle);
     //xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     //xTaskCreate(GPSReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
     //xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
+    xTaskCreate(TimeReaderTask, "timeReader", 4096, NULL, 1, &timeReaderTaskHandle);
 }
 
 void loop() {

@@ -18,7 +18,10 @@ void WifiConnectionTask(void* parameter) {
     while (true) {
         if (WiFi.status() != WL_CONNECTED) {
             WiFi.mode(WIFI_STA);
-            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
+            if (ledBlinkerTaskHandle != nullptr) {
+                xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
+            }
+
             for (auto& wifi : wifiCredentials) {
                 WiFi.begin(wifi.first, wifi.second);
                 Serial.printf("\n[WIFI]Trying to connect to %s\n", wifi.first);
@@ -34,8 +37,13 @@ void WifiConnectionTask(void* parameter) {
                 }
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial.println("\n[WIFI]Connected to WiFi");
-                    xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
-                    xTaskNotifyGive(vpnConnectionTaskHandle);
+                    if (ledBlinkerTaskHandle != nullptr) {
+                        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
+                    }
+                    if (VPNTaskHandle != nullptr) {
+                        // Notify VPN task that WiFi is connected
+                        xTaskNotifyGive(VPNTaskHandle);
+                    }
                     break;
                 }
             }          
@@ -172,6 +180,8 @@ void VPNConnectionTask(void* parameter) {
     Husarnet.selfHostedSetup(dashboardURL);
     Husarnet.join(husarnetJoinCode, hostName);
     Husarnet.start();
-    xTaskNotifyGive(serverTaskHandle); // Notify Server task that VPN is connected
+    if (serverTaskHandle != nullptr) {
+        xTaskNotifyGive(serverTaskHandle); // Notify Server task that VPN is connected
+    }
     vTaskDelete(NULL); // Delete this task after VPN is connected
 }
