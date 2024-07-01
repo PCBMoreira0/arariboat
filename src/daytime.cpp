@@ -54,7 +54,7 @@ void TimeReaderTask(void *parameter) {
         String timestamp = RTC.getTime("%Y%m%d%H%M%S");
         unsigned long local_epoch_seconds = RTC.getEpoch() + gmtSecOffset;
         //systemData.SetTimestamp(String(local_epoch_seconds));
-        Serial.printf("[TIME] %s\tLocal Epoch: %lu\n", timestamp.c_str(), local_epoch_seconds);
+        //Serial.printf("[TIME] %s\tLocal Epoch: %lu\n", timestamp.c_str(), local_epoch_seconds);
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }

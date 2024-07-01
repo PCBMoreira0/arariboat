@@ -57,9 +57,9 @@ void LedBlinkerTask(void* parameter) {
     uint32_t blink_rate = BlinkRate::Slow;
     uint32_t previous_blink_rate = blink_rate;
 
+    //Register serial callback commands
     esp_event_handler_register_with(eventLoop, SERIAL_PARSER_EVENT_BASE, ESP_EVENT_ANY_ID, serialCommandCallback, nullptr);
 
-  
     while (true) {
 
         static uint32_t previous_blink_time = millis();

@@ -3,47 +3,67 @@
 #include <unordered_map> // Hashtable for storing WiFi credentials.
 #include "ESPAsyncWebServer.h" // Make sure to include Husarnet before this.
 #include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
+#include "ESPmDNS.h" // Required for mDNS service discovery.
 #include "Utilities.hpp" // Custom utility macros and functions.
 
-void WifiConnectionTask(void* parameter) {
+static void serialCommandCallback(void* handler_args, esp_event_base_t base, int32_t id, void* event_data) {
     
-    // Store WiFi credentials in a hashtable.
+    const char* command = (const char*)event_data;
+
+    if (strncmp(command, "wifi", 4) == 0) {
+        Serial.printf("\n[WIFI]Reading WiFi data\n");
+        Serial.printf("\n[WIFI]Connected to %s with IP address %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+    }
+}
+
+void WifiTask(void* parameter) {
+    
     std::unordered_map<const char*, const char*> wifiCredentials;
-    wifiCredentials["Ursula"] = "biaviad36";
     wifiCredentials["EMobil 1"] = "faraboia";
     wifiCredentials["Innorouter"] = "innomaker";
     wifiCredentials["NITEE"] = "nitee123";
+
+    // Register a callback function to handle WiFi events. This function is called when the WiFi status changes.
+    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+        switch (event) {
+        case SYSTEM_EVENT_STA_GOT_IP:
+            Serial.printf("\n[WIFI]Connected to %s with IP address %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+            break;
+        default:
+            break;
+        }
+    });
+
+    //Register serial callback commands
+    esp_event_handler_register_with(eventLoop, SERIAL_PARSER_EVENT_BASE, ESP_EVENT_ANY_ID, serialCommandCallback, nullptr); 
     
     while (true) {
-        if (WiFi.status() != WL_CONNECTED) {
-            WiFi.mode(WIFI_STA);
-            if (ledBlinkerTaskHandle != nullptr) {
-                xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
-            }
 
-            for (auto& wifi : wifiCredentials) {
-                WiFi.begin(wifi.first, wifi.second);
-                Serial.printf("\n[WIFI]Trying to connect to %s\n", wifi.first);
-                int i = 0;
-                while (WiFi.status() != WL_CONNECTED) {
-                    vTaskDelay(pdMS_TO_TICKS(500));
-                    Serial.print(".");
-                    i++;
-                    if (i > 5) {
-                        Serial.printf("\n[WIFI]Failed to connect to %s\n", wifi.first);
-                        break;
-                    }
-                }
-                if (WiFi.status() == WL_CONNECTED) {
-                    Serial.println("\n[WIFI]Connected to WiFi");
-                    if (ledBlinkerTaskHandle != nullptr) {
-                        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
-                    }
-                    break;
-                }
-            }          
+        if (WiFi.status() == WL_CONNECTED) {
+            vTaskDelay(pdMS_TO_TICKS(400));
+            continue;
         }
-        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        WiFi.mode(WIFI_STA);
+        if (ledBlinkerTaskHandle != nullptr) {
+            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
+        }
+
+        for (auto& wifi : wifiCredentials) {
+            WiFi.begin(wifi.first, wifi.second);
+            Serial.printf("\n[WIFI]Trying to connect to %s\n", wifi.first);
+            int attempts = 0;
+            while (WiFi.status() != WL_CONNECTED) {
+                vTaskDelay(pdMS_TO_TICKS(500));
+                if (attempts++ > 5) break;
+            }
+            if (WiFi.status() == WL_CONNECTED) {
+                if (ledBlinkerTaskHandle != nullptr) {
+                    xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
+                }
+                break;
+            }
+        }
     }
 }
 
@@ -83,15 +103,22 @@ void ServerTask(void* parameter) {
         request->send(200, "text/html", "<h1>Boat32</h1><p>Latitude: " + String(latitude) + "</p><p>Longitude: " + String(longitude) + "</p>");
     });
 
+    while (WiFi.status() != WL_CONNECTED) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
-    // Wait for notification from VPN connection task before starting the server.
-    //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    if (!MDNS.begin("companion")) {
+        Serial.println("Error setting up MDNS responder!");
+        while (true) {
+            vTaskDelay(1000);
+        }
+    }
     
-    // Attach g update handler to the server and initialize the server.
+    // Initialize the OTA update service. This service allows the ESP32 to be updated over the air.
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
     server.begin();
 
     while (true) {
-        ulTaskNotifyTake(pdTRUE, 500);
+        vTaskDelay(500);
     }
 }

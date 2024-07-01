@@ -7,6 +7,7 @@ esp_event_base_t SERIAL_PARSER_EVENT_BASE = "SERIAL_PARSER";
 /// The use of the event loop allows the serial parser to be decoupled from the receiver of the parsed data.
 void SerialReaderTask(void *parameter) {
 
+    Serial.begin(9600);
     constexpr int inputBufferLength = 256;
     char inputBuffer[inputBufferLength];
     int bufferIndex = 0;

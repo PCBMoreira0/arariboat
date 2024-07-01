@@ -7,13 +7,34 @@
 
 typedef Adafruit_ADS1115 ADS1115; // Alias for the ADS1115 class.
 
-/// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
-/// @param input 
-/// @param slope 
-/// @param intercept 
-/// @return Calibrated reading
-float LinearCorrection(const float input_value, const float slope, const float intercept) {
-    return slope * input_value + intercept;
+static void serialCommandCallback(void* handler_args, esp_event_base_t base, int32_t id, void* event_data) {
+    
+    const char* command = (const char*)event_data;
+
+    if (strncmp(command, "adc", 3) == 0) {
+
+        ADS1115* adc = (ADS1115*)handler_args;
+
+        Serial.printf("\n[Instrumentation]Reading ADC values\n");
+        adc->setGain(GAIN_FOUR);
+        float voltage_battery = LinearCorrection(adc->readADC_SingleEnded(0), 0.002472f, 0.801442);
+
+        adc->setGain(GAIN_EIGHT);
+        float current_port = LinearCorrection(adc->readADC_SingleEnded(1), 0.005653f, -56.366843f);
+
+        adc->setGain(GAIN_EIGHT);
+        float current_starboard = LinearCorrection(adc->readADC_SingleEnded(2), 0.005627f, -56.204637f);
+
+        adc->setGain(GAIN_EIGHT);
+        float current_mppt = LinearCorrection(adc->readADC_SingleEnded(3), 0.001602f, 0.015848f);
+
+        Serial.printf("\n[Instrumentation]Battery voltage: %.2fV\n"
+                      "[Instrumentation]Port current: %.2fA\n"
+                      "[Instrumentation]Starboard current: %.2fA\n"
+                      "[Instrumentation]MPPT current: %.2fA\n",
+                      voltage_battery, current_port, current_starboard, current_mppt);
+        
+    }
 }
 
 void InstrumentationReaderTask(void* parameter) {
@@ -38,6 +59,8 @@ void InstrumentationReaderTask(void* parameter) {
     // but not when the ESP32 is powered by the USB port during tests on the laboratory workbench. In this case, the ground of the ESP32 and the ADS1115
     // must be explictly connected together for the I2C communication to work. If the ADS1115 is not detected, check continuity of the wires with multimeter.
     
+    Wire.begin(); // I2C master mode to communicate with the ADS1115 ADC
+
     ADS1115 adc; 
     constexpr uint8_t adc_addresses[] = {0x48, 0x49}; // Address is determined by a solder bridge on the instrumentation board.
     adc.setGain(GAIN_FOUR); // Configuring the PGA( Programmable Gain Amplifier) to amplify the signal by 4 times, so that the maximum input voltage is +/- 1.024V
@@ -56,6 +79,9 @@ void InstrumentationReaderTask(void* parameter) {
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
+
+    //Register serial callback commands
+    esp_event_handler_register_with(eventLoop, SERIAL_PARSER_EVENT_BASE, ESP_EVENT_ANY_ID, serialCommandCallback, &adc);
     
     while (true) {
         // In the ADS1115 single ended measurements have 15 bits of resolution. Only differential measurements have 16 bits of resolution.

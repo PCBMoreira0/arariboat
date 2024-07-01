@@ -1,5 +1,4 @@
 #include <Arduino.h> // Main Arduino library, required for projects that use the Arduino framework.
-#include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
 #include "Utilities.hpp" // Custom utility macros and functions.
 
 //TODO: Improve server interface for configuration and debug purposes.
@@ -18,7 +17,6 @@
 TaskHandle_t ledBlinkerTaskHandle = nullptr;
 TaskHandle_t wifiTaskHandle = nullptr;
 TaskHandle_t serverTaskHandle = nullptr;
-TaskHandle_t VPNTaskHandle = nullptr;
 TaskHandle_t serialReaderTaskHandle = nullptr;
 TaskHandle_t temperatureReaderTaskHandle = nullptr;
 TaskHandle_t gpsReaderTaskHandle = nullptr;
@@ -27,18 +25,15 @@ TaskHandle_t timeReaderTaskHandle = nullptr;
 
 void setup() {
 
-    Serial.begin(9600); // Lower baud rates are required as cable length increases.
     InitializeEventLoop(&eventLoop); // Initialize the event loop to handle events between tasks.
-
-    Wire.begin(); // I2C master mode to communicate with the ADS1115 ADC
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
-    xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
-    //xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
+    xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
+    xTaskCreate(TimeReaderTask, "timeReader", 4096, NULL, 1, &timeReaderTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
-    //xTaskCreate(GPSReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
-    //xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
-    xTaskCreate(TimeReaderTask, "timeReader", 4096, NULL, 1, &timeReaderTaskHandle);
+    xTaskCreate(GPSReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
+    xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
 }
 
 void loop() {
