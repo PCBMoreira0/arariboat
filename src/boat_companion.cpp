@@ -1,12 +1,5 @@
 #include <Arduino.h> // Main Arduino library, required for projects that use the Arduino framework.
-#include <WiFi.h> // Main library for WiFi connectivity, also used by AsyncWebServer.
-#include <unordered_map> // Hashtable for storing WiFi credentials.
-#include "Husarnet.h" // IPV6 for ESP32 to enable peer-to-peer communication between devices inside a Husarnet network.
-#include "ESPAsyncWebServer.h" // Make sure to include Husarnet before this.
-#include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
-#include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 #include <Wire.h> // Required for the ADS1115 ADC and communication with the LoRa board.
-#include <Preferences.h> // Non-volatile storage for storing the state of the boat.
 #include "Utilities.hpp" // Custom utility macros and functions.
 
 //TODO: Improve server interface for configuration and debug purposes.
@@ -40,7 +33,6 @@ void setup() {
     Wire.begin(); // I2C master mode to communicate with the ADS1115 ADC
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
     xTaskCreate(WifiConnectionTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
-    //xTaskCreate(VPNConnectionTask, "vpnConnection", 4096, NULL, 1, &VPNTaskHandle);
     //xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
