@@ -44,6 +44,18 @@ void ScanProbeAddresses(DallasTemperature &probes) {
     #endif
 }
 
+static void serialCommandCallback(void* handler_args, esp_event_base_t base, int32_t id, void* event_data) {
+    
+    const char* command = (const char*)event_data;
+    Serial.printf("\n[Temperature]: Received command %s\n", command);
+
+    if (strncmp(command, "scan", 4) == 0) {
+        Serial.printf("\n[Temperature]: Scanning for new probes\n");
+        ScanProbeAddresses(*((DallasTemperature*)handler_args));
+    }
+}
+
+
 void TemperatureReaderTask(void* parameter) {
 
     constexpr uint8_t pin_temperature_bus = 15; // GPIO used for OneWire communication
@@ -57,6 +69,8 @@ void TemperatureReaderTask(void* parameter) {
     DeviceAddress thermal_probe_zero = {0x28, 0xFF, 0x7C, 0x1C, 0x72, 0x16, 0x05, 0xF7};
     DeviceAddress thermal_probe_one = {0x28, 0x86, 0x1C, 0x07, 0xD6, 0x01, 0x3C, 0x8C};
     DeviceAddress thermal_probe_two = {0x28, 0xFF, 0xA5, 0x12, 0xA0, 0x16, 0x03, 0xC4};
+
+    esp_event_handler_register_with(eventLoop, SERIAL_PARSER_EVENT_BASE, ESP_EVENT_ANY_ID, serialCommandCallback, &probes); // Register the serial callback to scan for new probes
 
     while (true) {
         ScanProbeAddresses(probes); 
