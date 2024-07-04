@@ -45,8 +45,8 @@ void WifiTask(void* parameter) {
         }
 
         WiFi.mode(WIFI_STA);
-        if (ledBlinkerTaskHandle != nullptr) {
-            xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
+        if (ledBlinkerHandle != nullptr) {
+            xTaskNotify(ledBlinkerHandle, BlinkRate::Fast, eSetValueWithOverwrite);
         }
 
         for (auto& wifi : wifiCredentials) {
@@ -58,8 +58,8 @@ void WifiTask(void* parameter) {
                 if (attempts++ > 5) break;
             }
             if (WiFi.status() == WL_CONNECTED) {
-                if (ledBlinkerTaskHandle != nullptr) {
-                    xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
+                if (ledBlinkerHandle != nullptr) {
+                    xTaskNotify(ledBlinkerHandle, BlinkRate::Slow, eSetValueWithOverwrite);
                 }
                 break;
             }

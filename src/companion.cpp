@@ -14,7 +14,7 @@
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
 
-TaskHandle_t ledBlinkerTaskHandle = nullptr;
+TaskHandle_t ledBlinkerHandle = nullptr;
 TaskHandle_t wifiTaskHandle = nullptr;
 TaskHandle_t serverTaskHandle = nullptr;
 TaskHandle_t serialReaderTaskHandle = nullptr;
@@ -26,7 +26,7 @@ TaskHandle_t timeReaderTaskHandle = nullptr;
 void setup() {
 
     InitializeEventLoop(&eventLoop); // Initialize the event loop to handle events between tasks.
-    xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerTaskHandle);
+    xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
     xTaskCreate(TimeReaderTask, "timeReader", 4096, NULL, 1, &timeReaderTaskHandle);

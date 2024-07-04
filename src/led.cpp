@@ -6,13 +6,13 @@ static void serialCommandCallback(void* handler_args, esp_event_base_t base, int
     const char* command = (const char*)event_data;
 
     if (strncmp(command, "blinkfast", 9) == 0) {
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Fast, eSetValueWithOverwrite);
+        xTaskNotify(ledBlinkerHandle, BlinkRate::Fast, eSetValueWithOverwrite);
     } else if (strncmp(command, "blinkmedium", 11) == 0) {
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Medium, eSetValueWithOverwrite);
+        xTaskNotify(ledBlinkerHandle, BlinkRate::Medium, eSetValueWithOverwrite);
     } else if (strncmp(command, "blinkslow", 9) == 0) {
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Slow, eSetValueWithOverwrite);
+        xTaskNotify(ledBlinkerHandle, BlinkRate::Slow, eSetValueWithOverwrite);
     } else if (strncmp(command, "pulse", 5) == 0) {
-        xTaskNotify(ledBlinkerTaskHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
+        xTaskNotify(ledBlinkerHandle, BlinkRate::Pulse, eSetValueWithOverwrite);
     }
 }
 

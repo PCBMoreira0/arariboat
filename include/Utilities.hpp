@@ -29,7 +29,7 @@ extern void TimeReaderTask(void* parameter);
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
 // Each handle is then assigned to the task created in the setup() function.
 
-extern TaskHandle_t ledBlinkerTaskHandle;
+extern TaskHandle_t ledBlinkerHandle;
 extern TaskHandle_t wifiTaskHandle;
 extern TaskHandle_t serverTaskHandle;
 extern TaskHandle_t serialReaderTaskHandle;
