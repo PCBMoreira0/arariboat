@@ -13,16 +13,16 @@
 
 #endif
 
-//LORA_V1_6_OLED + SDCard + SX1276 LoRa
+//LORA_V1_6_OLED + SDCard + SX1276 Lora
 #define LORA_V1_6_OLED  1
 #define LORA_PERIOD 915     
 #define SYNC_WORD 0xFE
 
-// Pins for SX1276 LoRa modem
+// Pins for SX1276 Lora modem
 #define CONFIG_MOSI 27
 #define CONFIG_MISO 19
 #define CONFIG_CLK  5
-#define CONFIG_NSS  18
+#define CONFIG_CS  18
 #define CONFIG_RST  23
 #define CONFIG_DIO0 26 //OnTxDone and OnRxDone interrupt flag pins
 
