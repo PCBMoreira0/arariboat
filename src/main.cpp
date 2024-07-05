@@ -5,7 +5,6 @@
 //TODO: Implement auxiliary battery and pumps readings using some I2C system
 //TODO: Send data directly to InfluxDB instead of using Husarnet
 //TODO: Save all measurements to a file in the SPIFFS file system or some microSD card, then flush it to InfluxDB when the connection is available
-//TODO: Use IDF event loop for serial parsing and intertask communication
 //TODO: Implement RPM measurements code
 //TODO: Assign better weights to task priorities via benchmarks
 

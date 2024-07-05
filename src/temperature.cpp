@@ -75,21 +75,21 @@ void TemperatureReaderTask(void* parameter) {
     while (true) {
         ScanProbeAddresses(probes); 
         probes.requestTemperatures();
-        float temperature_battery_front = LinearCorrection(probes.getTempC(thermal_probe_zero), 1.0f, 0.0f);
-        float temperature_battery_rear = LinearCorrection(probes.getTempC(thermal_probe_one), 1.0f, 1.5f);
-        float temperature_mppt = LinearCorrection(probes.getTempC(thermal_probe_two), 1.0f, 0.0f);
+        float temperature_battery_left = probes.getTempC(thermal_probe_zero);
+        float temperature_battery_right = probes.getTempC(thermal_probe_one);
+        float temperature_mppt = probes.getTempC(thermal_probe_two);
         
         #ifdef DEBUG
-        if (temperature_battery_front == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery: Device disconnected\n", thermal_probe_zero[7]);
+        if (temperature_battery_left == DEVICE_DISCONNECTED_C) {
+            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Left: Device disconnected\n", thermal_probe_zero[7]);
         } else {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery: %f\n", thermal_probe_zero[6], thermal_probe_zero[7], temperature_battery_front);
+            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Right: %f\n", thermal_probe_zero[6], thermal_probe_zero[7], temperature_battery_left);
         }
 
-        if (temperature_battery_rear == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery: Device disconnected\n", thermal_probe_one[7]);
+        if (temperature_battery_right == DEVICE_DISCONNECTED_C) {
+            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Left: Device disconnected\n", thermal_probe_one[7]);
         } else {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery: %f\n", thermal_probe_one[6], thermal_probe_one[7], temperature_battery_rear);
+            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Right: %f\n", thermal_probe_one[6], thermal_probe_one[7], temperature_battery_right);
         }
 
         if (temperature_mppt == DEVICE_DISCONNECTED_C) {
@@ -99,10 +99,14 @@ void TemperatureReaderTask(void* parameter) {
         }
         #endif
 
+        temperature_battery_left = LinearCorrection(temperature_battery_left, 1.0f, 0.0f);
+        temperature_battery_right = LinearCorrection(temperature_battery_right, 1.0f, 1.5f);
+        temperature_mppt = LinearCorrection(temperature_mppt, 1.0f, 0.0f);
+
         mavlink_message_t message;
         mavlink_temperatures_t temperatures = {
-            .temperature_motor = temperature_battery_front,
-            .temperature_battery = temperature_battery_rear,
+            .temperature_motor = temperature_battery_left,
+            .temperature_battery = temperature_battery_right,
             .temperature_mppt = temperature_mppt
         };
         mavlink_msg_temperatures_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &temperatures);

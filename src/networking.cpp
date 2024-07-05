@@ -67,6 +67,18 @@ void WifiTask(void* parameter) {
     }
 }
 
+// Configure the mDNS responder to allow the ESP32 to be discovered on the network by its hostname.
+void ConfigureMDNS() {
+    
+    // Start the mDNS responder. This allows the ESP32 to be discovered on the network by its hostname.
+    if (!MDNS.begin(STRINGIFY(MDNS_HOSTNAME))) {
+        Serial.println("Error setting up MDNS responder!");
+        while (true) {
+            vTaskDelay(1000);
+        }
+    }
+}
+
 void ServerTask(void* parameter) {
 
     // Create an async web server on port 80. This is the default port for HTTP. 
@@ -107,12 +119,7 @@ void ServerTask(void* parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    if (!MDNS.begin("companion")) {
-        Serial.println("Error setting up MDNS responder!");
-        while (true) {
-            vTaskDelay(1000);
-        }
-    }
+    ConfigureMDNS();
     
     // Initialize the OTA update service. This service allows the ESP32 to be updated over the air.
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update

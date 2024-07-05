@@ -15,6 +15,9 @@
 #define DEBUG_PRINT(message, ...)
 #endif
 
+//Preprocessor trick to convert a macro to a string
+#define STRINGIFY(x) __STRINGIFY__(x)
+#define __STRINGIFY__(x) #x
 
 extern void LedBlinkerTask(void* parameter);
 extern void WifiTask(void* parameter);
