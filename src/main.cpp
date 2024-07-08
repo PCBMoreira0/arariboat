@@ -13,7 +13,7 @@
 
 TaskHandle_t ledBlinkerHandle = nullptr;
 TaskHandle_t wifiTaskHandle = nullptr;
-TaskHandle_t serverTaskHandle = nullptr;
+TaskHandle_t serverHandle = nullptr;
 TaskHandle_t serialReaderHandle = nullptr;
 
 extern void InitializeFlashMemory();
@@ -33,7 +33,7 @@ void setup() {
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
+    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverHandle);
     xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
     InitializeFlashMemory();
     xTaskCreate(RadioTask, "radio", 4096, NULL, 1, NULL);

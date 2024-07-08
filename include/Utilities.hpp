@@ -35,7 +35,7 @@ extern void TimeReaderTask(void* parameter);
 
 extern TaskHandle_t ledBlinkerHandle;
 extern TaskHandle_t wifiTaskHandle;
-extern TaskHandle_t serverTaskHandle;
+extern TaskHandle_t serverHandle;
 extern TaskHandle_t serialReaderTaskHandle;
 extern TaskHandle_t temperatureReaderTaskHandle;
 extern TaskHandle_t gpsReaderTaskHandle;

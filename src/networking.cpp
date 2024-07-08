@@ -5,8 +5,7 @@
 #include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
 #include "ESPmDNS.h" // Required for mDNS service discovery.
 #include "Utilities.hpp" // Custom utility macros and functions.
-#include "LoraConfigManager.hpp" // Non-volatile storage for system parameters
-#include "LoraRequestHandler.hpp" // HTTP request handler for LoRa configuration
+#include "LoraRequestHandlers.hpp" // HTTP request handler for LoRa configuration
 #include "WiFiManager.hpp" // Wrapper class for WiFi management
 
 static void serialCommandCallback(void* handler_args, esp_event_base_t base, int32_t id, void* event_data) {
@@ -33,13 +32,24 @@ static void ConfigureWifiCallbacks(WifiManager& wifiManager) {
     });
 }
 
+// Configure the mDNS responder to allow the ESP32 to be discovered on the network by its hostname.
+static void ConfigureMDNS() {
+    
+    // Start the mDNS responder. This allows the ESP32 to be discovered on the network by its hostname.
+    if (!MDNS.begin(STRINGIFY(MDNS_HOSTNAME))) {
+        Serial.println("Error setting up MDNS responder!");
+        while (true) {
+            vTaskDelay(1000);
+        }
+    }
+}
+
 void WifiTask(void* parameter) {
     
     std::unordered_map<const char*, const char*> wifiCredentials;
     wifiCredentials["EMobil 1"] = "faraboia";
     wifiCredentials["Ararirouter"] = "arariboia";
     wifiCredentials["NITEE"] = "nitee123";
-    wifiCredentials["Viana"] = "1040441000";
 
     ConfigureWifiCallbacks(wifiManager);
 
@@ -87,7 +97,7 @@ void WifiTask(void* parameter) {
     }
 }
 
-void addRoutes(AsyncWebServer& server) {
+static void addRoutes(AsyncWebServer& server) {
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/html", "<h1>Boat-Lora</h1><p>WiFi connected: " + WiFi.SSID() + "</p><p>IP address: " + WiFi.localIP().toString() + "</p>");
     });
@@ -99,7 +109,9 @@ void addRoutes(AsyncWebServer& server) {
         ESP.restart();
     });
 
-    server.on("/lora-config", HTTP_POST, handleLoraConfigRequest);
+    server.on("/lora-config", HTTP_POST, handleLoraConfigSaveRequest);
+
+    server.on("/lora/transmit", HTTP_POST, handleLoraTransmitRequest);
 }
 
 void ServerTask(void* parameter) {
@@ -117,10 +129,7 @@ void ServerTask(void* parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    while (!MDNS.begin("boat-radio")) {
-        Serial.println("Error setting up MDNS responder!");
-        vTaskDelay(1000);
-    }
+    ConfigureMDNS();
     
     // Initialize the OTA update service. This service allows the ESP32 to be updated over the air.
     AsyncElegantOTA.begin(&server); // Available at http://[esp32ip]/update or http://[esp32hostname]/update
