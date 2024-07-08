@@ -9,8 +9,6 @@ public:
     mavlink_instrumentation_t instrumentation;
     mavlink_gps_info_t gps;
     mavlink_temperatures_t temperature;
-    mavlink_control_system_t controlSystem;
-
     
 private:
     SystemData(); // Private constructor to avoid multiple instances.
