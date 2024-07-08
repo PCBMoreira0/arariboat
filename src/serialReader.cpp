@@ -3,48 +3,15 @@
 #include "arariboat/mavlink.h"
 #include "Utilities.hpp"
 #include "radio.hpp"
+#include "MavlinkUtilities.hpp"
 
 esp_event_base_t SERIAL_PARSER_EVENT_BASE = "SERIAL_PARSER";
 //ESP_EVENT_DECLARE_BASE(SERIAL_PARSER_EVENT_BASE);
 
 void ProcessMavlinkMessage(mavlink_message_t message) {
-    switch (message.msgid) {
-        case MAVLINK_MSG_ID_HEARTBEAT: {
-            DEBUG_PRINTF("[RX]Received heartbeat\n", NULL);
-            break;
-        }
-        case MAVLINK_MSG_ID_CONTROL_SYSTEM: {
-            DEBUG_PRINTF("[RX]Received control system\n", NULL);
-            break;
-        }
-        case MAVLINK_MSG_ID_INSTRUMENTATION: {
-            DEBUG_PRINTF("[RX]Received instrumentation\n", NULL);
-            break;
-        }
-        case MAVLINK_MSG_ID_TEMPERATURES: {
-            DEBUG_PRINTF("[RX]Received temperatures\n", NULL);
-            break;
-        }
-        case MAVLINK_MSG_ID_GPS_INFO: {
-            DEBUG_PRINTF("[RX]Received GPS info\n", NULL);
-            break;
-        }
-        case MAVLINK_MSG_ID_AUX_SYSTEM: {
-            DEBUG_PRINTF("[RX]Received aux system\n", NULL);
-            break;
-        }
-        case MAVLINK_MSG_ID_LORA_PARAMS: {
-            DEBUG_PRINTF("[RX]Received lora params\n", NULL);
-            break;
-        }
-        default: {
-            DEBUG_PRINTF("[RX]Received message with ID #%d\n", message.msgid);
-            break;
-        }
-
-        //Post mavlink message to queue
-        EnqueueMavlinkMessage(message, radioQueue);      
-    }
+  
+    PrintMavlinkMessageInfo(message);
+    EnqueueMavlinkMessage(message, radioQueue);      
 }
 
 bool TryParseMavlinkMessage(uint8_t input, mavlink_channel_t channel) {

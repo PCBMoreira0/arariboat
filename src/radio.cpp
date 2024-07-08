@@ -25,7 +25,7 @@ static void SerialCommandCallback(void* handler_args, esp_event_base_t base, int
     if (strncmp(command, "mavtemp", 7) == 0) {
         DEBUG_PRINTF("[LORA]Sending temperatures\n", NULL);
         mavlink_message_t message;
-        mavlink_msg_temperatures_pack(1, 200, &message, 25.0f, 26.0f, 27.0f);
+        mavlink_msg_temperatures_pack(1, 200, &message, 25.0f, 26.0f, 27.0f, -1);
         EnqueueMavlinkMessage(message, radioQueue);
     }
 }
