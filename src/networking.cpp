@@ -101,18 +101,34 @@ void ServerTask(void* parameter) {
 
     server.on("/instrumentation", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Send system instrumentation data from singleton class
-        float current_motor = SystemData::getInstance().instrumentation.motor_current;
-        float current_battery = SystemData::getInstance().instrumentation.battery_current;
-        float current_mppt = SystemData::getInstance().instrumentation.mppt_current;
-        float voltage_battery = SystemData::getInstance().instrumentation.battery_voltage;
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Current motor: " + String(current_motor) + "</p><p>Current battery: " + String(current_battery) + "</p><p>Current MPPT: " + String(current_mppt) + "</p><p>Voltage battery: " + String(voltage_battery) + "</p>");
-    });
-    
-    server.on("/gps", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Send GPS data from singleton class
-        float latitude = SystemData::getInstance().gps.latitude;
-        float longitude = SystemData::getInstance().gps.longitude;
-        request->send(200, "text/html", "<h1>Boat32</h1><p>Latitude: " + String(latitude) + "</p><p>Longitude: " + String(longitude) + "</p>");
+        float voltage_battery = SystemData::getInstance().all_info.battery_voltage;
+        float current_motor_left = SystemData::getInstance().all_info.motor_current_left;
+        float current_motor_right = SystemData::getInstance().all_info.motor_current_right;
+        float current_mppt = SystemData::getInstance().all_info.mppt_current;
+        float temperature_battery_left = SystemData::getInstance().all_info.temperature_battery_left;
+        float temperature_battery_right = SystemData::getInstance().all_info.temperature_battery_right;
+        float temperature_mppt = SystemData::getInstance().all_info.temperature_mppt;
+        float latitude = SystemData::getInstance().all_info.latitude;
+        float longitude = SystemData::getInstance().all_info.longitude;
+        float rpm_left = SystemData::getInstance().all_info.rpm_left;
+        float rpm_right = SystemData::getInstance().all_info.rpm_right;
+        uint64_t timestamp = SystemData::getInstance().all_info.timestamp;
+
+        String response = "<h1>Boat32</h1>";
+        response += "<p>Voltage Battery: " + String(voltage_battery) + " V</p>";
+        response += "<p>Current Motor Left: " + String(current_motor_left) + " A</p>";
+        response += "<p>Current Motor Right: " + String(current_motor_right) + " A</p>";
+        response += "<p>Current MPPT: " + String(current_mppt) + " A</p>";
+        response += "<p>Temperature Battery Left: " + String(temperature_battery_left) + " °C</p>";
+        response += "<p>Temperature Battery Right: " + String(temperature_battery_right) + " °C</p>";
+        response += "<p>Temperature MPPT: " + String(temperature_mppt) + " °C</p>";
+        response += "<p>Latitude: " + String(latitude) + "</p>";
+        response += "<p>Longitude: " + String(longitude) + "</p>";
+        response += "<p>RPM Left: " + String(rpm_left) + "</p>";
+        response += "<p>RPM Right: " + String(rpm_right) + "</p>";
+        response += "<p>Timestamp: " + String(timestamp) + "</p>";
+
+        request->send(200, "text/html", response);
     });
 
     while (WiFi.status() != WL_CONNECTED) {

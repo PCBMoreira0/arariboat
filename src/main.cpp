@@ -36,7 +36,8 @@ void setup() {
 }
 
 void loop() {
-    vTaskDelete(NULL);
+    SystemData::getInstance().WriteToSerial();
+    vTaskDelay(1000);
 }
 
 

@@ -31,7 +31,7 @@ void ScanProbeAddresses(DallasTemperature &probes) {
         return;
     }
 
-    Serial.printf("\nFound %d probes\n", probes.getDeviceCount());
+    DEBUG_PRINTF("\nFound %d probes\n", probes.getDeviceCount());
     for (uint8_t i = 0; i < probes.getDeviceCount(); i++) {
         DeviceAddress device_address;
         if (!probes.getAddress(device_address, i)) {
@@ -54,10 +54,15 @@ static void serialCommandCallback(void* handler_args, esp_event_base_t base, int
     }
 }
 
+void PrintDebugTemperature(float battery_left, float battery_right, float mppt) {
+    DEBUG_PRINTF("\n[Temperature]Battery Left: %f\n", battery_left);
+    DEBUG_PRINTF("\n[Temperature]Battery Right: %f\n", battery_right);
+    DEBUG_PRINTF("\n[Temperature]MPPT: %f\n", mppt);
+}
 
 void TemperatureReaderTask(void* parameter) {
 
-    constexpr uint8_t pin_temperature_bus = 15; // GPIO used for OneWire communication
+    constexpr uint8_t pin_temperature_bus = GPIO_NUM_15; // GPIO used for OneWire communication
     
     OneWire one_wire_device(pin_temperature_bus); // Setup a one_wire_device instance to communicate with any devices that use the OneWire protocol
     DallasTemperature probes(&one_wire_device); // Pass our one_wire_device reference to Dallas Temperature sensor, which uses the OneWire protocol.
@@ -79,43 +84,17 @@ void TemperatureReaderTask(void* parameter) {
         float temperature_battery_right = probes.getTempC(thermal_probe_one);
         float temperature_mppt = probes.getTempC(thermal_probe_two);
         
-        #ifdef DEBUG
-        if (temperature_battery_left == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Left: Device disconnected\n", thermal_probe_zero[7]);
-        } else {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Right: %f\n", thermal_probe_zero[6], thermal_probe_zero[7], temperature_battery_left);
-        }
-
-        if (temperature_battery_right == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Left: Device disconnected\n", thermal_probe_one[7]);
-        } else {
-            DEBUG_PRINTF("\n[Temperature][%x%x]Battery Right: %f\n", thermal_probe_one[6], thermal_probe_one[7], temperature_battery_right);
-        }
-
-        if (temperature_mppt == DEVICE_DISCONNECTED_C) {
-            DEBUG_PRINTF("\n[Temperature][%x%x]MPPT: Device disconnected\n", thermal_probe_two[7]);
-        } else {
-            DEBUG_PRINTF("\n[Temperature][%x%x]MPPT: %f\n", thermal_probe_two[6], thermal_probe_two[7], temperature_mppt);
-        }
-        #endif
+        //PrintDebugTemperature(temperature_battery_left, temperature_battery_right, temperature_mppt);
 
         temperature_battery_left = LinearCorrection(temperature_battery_left, 1.0f, 0.0f);
         temperature_battery_right = LinearCorrection(temperature_battery_right, 1.0f, 1.5f);
         temperature_mppt = LinearCorrection(temperature_mppt, 1.0f, 0.0f);
 
-        mavlink_message_t message;
-        mavlink_temperatures_t temperatures = {
-            .temperature_motor = temperature_battery_left,
-            .temperature_battery = temperature_battery_right,
-            .temperature_mppt = temperature_mppt
-        };
-        mavlink_msg_temperatures_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &temperatures);
-        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-        uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-        Serial.write(buffer, len);
-        Serial.println();
+        SystemData::getInstance().all_info.temperature_battery_left = temperature_battery_left;
+        SystemData::getInstance().all_info.temperature_battery_right = temperature_battery_right;
+        SystemData::getInstance().all_info.temperature_mppt = temperature_mppt;
 
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 

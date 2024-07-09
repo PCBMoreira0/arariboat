@@ -60,45 +60,17 @@ void GPSReaderTask(void* parameter) {
                 constexpr float invalid_value = -1.0f; // Begin the fields with arbitrated invalid value and update them if the gps data is valid.
                 float latitude = invalid_value;
                 float longitude = invalid_value;
-                float speed = invalid_value;
-                float course = invalid_value;
-                uint8_t satellites = 0;
 
                 if (gps.location.isValid()) {
                     latitude = gps.location.lat();
                     longitude = gps.location.lng();
                     DEBUG_PRINTF("[GPS]Latitude: %f, Longitude: %f\n", latitude, longitude);
                 }
-                if (gps.speed.isValid()) { 
-                    speed = gps.speed.kmph();
-                    DEBUG_PRINTF("[GPS]Speed: %f\n", speed);
-                }
-                if (gps.course.isValid()) {
-                    course = gps.course.deg();
-                    DEBUG_PRINTF("[GPS]Course: %f\n", course);
-                }
-                if (gps.satellites.isValid()) {
-                    satellites = gps.satellites.value();
-                    if (!satellites) break; // If no satellites are visible, the gps data is invalid. Break from the function.
-                    DEBUG_PRINTF("[GPS]Satellites: %d\n", satellites);
-                }
-
-                // Prepare and send mavlink message by encoding the payload into a struct, then encoding the struct into a mavlink message below.
-                mavlink_message_t message;
-                mavlink_gps_info_t gps_info = {
-                    latitude,
-                    longitude,
-                    speed,
-                    course,
-                    satellites
-                };
-                    
-                mavlink_msg_gps_info_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &gps_info);
-                uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-                uint16_t length = mavlink_msg_to_send_buffer(buffer, &message);
-                Serial.write(buffer, length);
+                
+                SystemData::getInstance().all_info.latitude = latitude;
+                SystemData::getInstance().all_info.longitude = longitude;
             }
         }           
-        vTaskDelay(pdMS_TO_TICKS(6000));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }

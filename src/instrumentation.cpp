@@ -101,46 +101,18 @@ void InstrumentationReaderTask(void* parameter) {
         adc.setGain(GAIN_EIGHT);
         float current_mppt = LinearCorrection(adc.readADC_SingleEnded(3), 0.001602f, 0.015848f);
 
-        Serial.printf("\n[Instrumentation]Battery voltage: %.2fV\n"
+        DEBUG_PRINTF("\n[Instrumentation]Battery voltage: %.2fV\n"
                       "[Instrumentation]Port current: %.2fA\n"
                       "[Instrumentation]Starboard current: %.2fA\n"
                       "[Instrumentation]MPPT current: %.2fA\n",
                       voltage_battery, current_port, current_starboard, current_mppt);
         
-        /*
-        if (SystemData::getInstance().debug_print & SystemData::debug_print_flags::Instrumentation) {
-            DEBUG_PRINTF( "\n[Instrumentation]Primary resistor voltage drop: %fV\n"
-                            "[Instrumentation]Battery: %fV\n"
-                            "[Instrumentation]Calibrated battery: %fV\n"
-                            "[Instrumentation]Motor current: %fV\n"
-                            "[Instrumentation]Battery current: %fV\n"
-                            "[Instrumentation]MPPT current: %fV\n",
-            voltage_primary_resistor_drop, voltage_battery, calibrated_voltage_battery, current_motor, current_battery, current_mppt);
-        }
+        SystemData::getInstance().all_info.battery_voltage = voltage_battery;
+        SystemData::getInstance().all_info.motor_current_left = current_port;
+        SystemData::getInstance().all_info.motor_current_right = current_starboard;
+        SystemData::getInstance().all_info.mppt_current = current_mppt;
         
-
-        SystemData::getInstance().instrumentation.voltage_battery = calibrated_voltage_battery;
-        SystemData::getInstance().instrumentation.current_zero = current_motor;
-        SystemData::getInstance().instrumentation.current_one = current_battery;
-        SystemData::getInstance().instrumentation.current_two = current_mppt;
-
-        
-        */
-
-        // Prepare and send Mavlink message
-        mavlink_message_t message;
-        mavlink_instrumentation_t instrumentation = {
-            .battery_voltage = voltage_battery,
-            .motor_current = current_starboard,
-            .battery_current = current_port,
-            .mppt_current = current_mppt,
-        };
-        
-        mavlink_msg_instrumentation_encode_chan(1, MAV_COMP_ID_ONBOARD_COMPUTER, MAVLINK_COMM_0, &message, &instrumentation);
-        uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-        uint16_t len = mavlink_msg_to_send_buffer(buffer, &message);
-        Serial.write(buffer, len);
-        vTaskDelay(pdMS_TO_TICKS(4000));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 

@@ -6,11 +6,9 @@ class SystemData {
 public:
     static SystemData& getInstance();
 
-    mavlink_instrumentation_t instrumentation;
-    mavlink_gps_info_t gps;
-    mavlink_temperatures_t temperature;
-    mavlink_control_system_t controlSystem;
+    mavlink_all_info_t all_info;
 
+    void WriteToSerial();
     
 private:
     SystemData(); // Private constructor to avoid multiple instances.
