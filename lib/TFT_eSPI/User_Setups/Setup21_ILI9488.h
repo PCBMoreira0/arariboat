@@ -10,10 +10,10 @@
 #define TFT_CS   15   // Chip select control pin
 #define TFT_RST  4    // Reset pin (could connect to RST pin)
 #define TFT_DC   2    // Data Command control pin
-#define TFT_MOSI 16 // or 23
-#define TFT_SCLK 17 // or 21
+#define TFT_MOSI 12 // or 23
+#define TFT_SCLK 14 // or 21
 // LED PIN CONNECTED TO VIN
-#define TFT_MISO 5 // or 19 (leave TFT SDO disconnected if other SPI devices share MISO)
+#define TFT_MISO 13 // or 19 (leave TFT SDO disconnected if other SPI devices share MISO)
 
 /*
 //VIN PIN
