@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "arariboat/mavlink.h" // Custom mavlink dialect for the boat generated using Mavgen tool.
 
 // Singleton class for storing system-data that needs to be accessed by multiple tasks.
@@ -9,6 +10,8 @@ public:
     mavlink_all_info_t all_info;
 
     void WriteToSerial();
+
+    String GetLineProtocol();
     
 private:
     SystemData(); // Private constructor to avoid multiple instances.

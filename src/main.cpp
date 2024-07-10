@@ -26,9 +26,9 @@ void setup() {
 
     InitializeEventLoop(&eventLoop); // Initialize the event loop to handle events between tasks.
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
-    xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverTaskHandle);
-    xTaskCreate(TimeReaderTask, "timeReader", 4096, NULL, 1, &timeReaderTaskHandle);
+    xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 2, &wifiTaskHandle);
+    xTaskCreate(ServerTask, "server", 8096, NULL, 3, &serverTaskHandle);
+    xTaskCreate(TimeReaderTask, "timeReader", 4096, NULL, 2, &timeReaderTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderTaskHandle);
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GPSReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);

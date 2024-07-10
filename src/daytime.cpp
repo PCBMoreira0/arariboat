@@ -36,7 +36,7 @@ void TimeReaderTask(void *parameter) {
     configTime(gmtSecOffset, daylightSecOffset, "south-america.pool.ntp.org");
     struct tm timeinfo;
     while (!getLocalTime(&timeinfo)) {
-		logger.log("[TIME]Failed to obtain network time", 12000);
+		logger.log("[TIME]Failed to obtain network time", 30000);
 		vTaskDelay(pdMS_TO_TICKS(3000));
 	}
     logger.stop();
@@ -54,7 +54,7 @@ void TimeReaderTask(void *parameter) {
         String timestamp = RTC.getTime("%Y%m%d%H%M%S");
         unsigned long local_epoch_seconds = RTC.getEpoch() + gmtSecOffset;
         SystemData::getInstance().all_info.timestamp = local_epoch_seconds;
-        Serial.printf("[TIME] %s\tLocal Epoch: %lu\n", timestamp.c_str(), local_epoch_seconds);
+        //DEBUG_PRINTF("[TIME] %s\tLocal Epoch: %lu\n", timestamp.c_str(), local_epoch_seconds);
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }

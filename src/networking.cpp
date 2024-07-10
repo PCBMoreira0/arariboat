@@ -5,6 +5,7 @@
 #include "AsyncElegantOTA.h" // Over the air updates for the ESP32.
 #include "ESPmDNS.h" // Required for mDNS service discovery.
 #include "Utilities.hpp" // Custom utility macros and functions.
+#include "InfluxDB.hpp" // Custom InfluxDB client for sending data to InfluxDB.
 
 static void serialCommandCallback(void* handler_args, esp_event_base_t base, int32_t id, void* event_data) {
     
@@ -142,6 +143,9 @@ void ServerTask(void* parameter) {
     server.begin();
 
     while (true) {
-        vTaskDelay(500);
+        String line_protocol = SystemData::getInstance().GetLineProtocol();
+        //DEBUG_PRINTF("\n[HTTP]]Sending Data: \n%s", line_protocol.c_str());
+        postToInfluxDB(line_protocol);
+        vTaskDelay(2000);
     }
 }

@@ -27,7 +27,6 @@ void ScanProbeAddresses(DallasTemperature &probes) {
     
     #ifdef DEBUG
     if (probes.getDeviceCount() == 0) {
-        DEBUG_PRINTF("%s", "\nNo probes found\n");
         return;
     }
 
@@ -84,11 +83,20 @@ void TemperatureReaderTask(void* parameter) {
         float temperature_battery_right = probes.getTempC(thermal_probe_one);
         float temperature_mppt = probes.getTempC(thermal_probe_two);
         
-        //PrintDebugTemperature(temperature_battery_left, temperature_battery_right, temperature_mppt);
 
-        temperature_battery_left = LinearCorrection(temperature_battery_left, 1.0f, 0.0f);
-        temperature_battery_right = LinearCorrection(temperature_battery_right, 1.0f, 1.5f);
-        temperature_mppt = LinearCorrection(temperature_mppt, 1.0f, 0.0f);
+        if (temperature_battery_left != DEVICE_DISCONNECTED_C) {
+            temperature_battery_left = LinearCorrection(temperature_battery_left, 1.0f, 0.0f);
+        }
+
+        if (temperature_battery_right != DEVICE_DISCONNECTED_C) {
+            temperature_battery_right = LinearCorrection(temperature_battery_right, 1.0f, 1.5f);
+        }
+
+        if (temperature_mppt != DEVICE_DISCONNECTED_C) {
+            temperature_mppt = LinearCorrection(temperature_mppt, 1.0f, 0.0f);
+        }
+
+        //PrintDebugTemperature(temperature_battery_left, temperature_battery_right, temperature_mppt);
 
         SystemData::getInstance().all_info.temperature_battery_left = temperature_battery_left;
         SystemData::getInstance().all_info.temperature_battery_right = temperature_battery_right;
