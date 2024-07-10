@@ -34,7 +34,7 @@ void setup() {
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
     xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverHandle);
-    xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
+    //xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
     InitializeFlashMemory();
     xTaskCreate(RadioTask, "radio", 4096, NULL, 1, NULL);
 }
