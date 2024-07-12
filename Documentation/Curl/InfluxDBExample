@@ -1,0 +1,7 @@
+curl -v "44.221.0.169:8086/api/v2/write?bucket=Arariboia&org=Innomaker&precision=s" \
+--header "Authorization: Token gK8YfMaAl54lo2sgZLiM3Y5CQStHip-7mBe5vbhh1no86k72B4Hqo8Tj1qAL4Em-zGRUxGwBWLkQd1MR9foZ-g==" \
+--header "Content-Type: text/plain; charset=utf-8" \
+--header "Accept: application/json" \
+--data-binary "Yonah battery_voltage=0.00,motor_current_left=0.00,motor_current_right=0.00,mppt_current=0.00,temp_bat_left=-127.00,temp_bat_right=-127.00,temp_mppt=-127.00,latitude=0.000000,longitude=0.000000,rpm_left=0.00,rpm_right=0.00 1720573253"
+
+

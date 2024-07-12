@@ -21,6 +21,7 @@ TaskHandle_t temperatureReaderTaskHandle = nullptr;
 TaskHandle_t gpsReaderTaskHandle = nullptr;
 TaskHandle_t instrumentationReaderTaskHandle = nullptr;
 TaskHandle_t timeReaderTaskHandle = nullptr;
+TaskHandle_t frequencyCounterTaskHandle = nullptr;
 
 void setup() {
 
@@ -33,6 +34,7 @@ void setup() {
     xTaskCreate(TemperatureReaderTask, "temperatureReader", 4096, NULL, 1, &temperatureReaderTaskHandle);
     xTaskCreate(GPSReaderTask, "gpsReader", 4096, NULL, 1, &gpsReaderTaskHandle);
     xTaskCreate(InstrumentationReaderTask, "instrumentationReader", 4096, NULL, 3, &instrumentationReaderTaskHandle);
+    xTaskCreate(FrequencyCounterTask, "frequencyCounter", 4096, NULL, 1, &frequencyCounterTaskHandle);
 }
 
 void loop() {

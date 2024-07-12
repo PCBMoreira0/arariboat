@@ -27,6 +27,7 @@ extern void TemperatureReaderTask(void* parameter);
 extern void GPSReaderTask(void* parameter);
 extern void InstrumentationReaderTask(void* parameter);
 extern void TimeReaderTask(void* parameter);
+extern void FrequencyCounterTask(void* parameter);
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
 // The handle is initialized to nullptr to avoid the task being created before the setup() function.
@@ -40,6 +41,7 @@ extern TaskHandle_t temperatureReaderTaskHandle;
 extern TaskHandle_t gpsReaderTaskHandle;
 extern TaskHandle_t instrumentationReaderTaskHandle;
 extern TaskHandle_t timeReaderTaskHandle;
+extern TaskHandle_t frequencyCounterTaskHandle;
 
 /// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
 /// @return Calibrated reading
