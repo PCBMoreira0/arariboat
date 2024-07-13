@@ -1,6 +1,5 @@
 #include <Arduino.h> // Main Arduino library, required for projects that use the Arduino framework.
-#include <TFT_eSPI.h>     // Hardware-specific library
-#include <TFT_eWidget.h>  // Widget library
+#include "DisplaySetup.hpp"  // Hardware-specific library
 #include "Utilities.hpp" // Custom utility macros and functions.
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.
@@ -22,6 +21,7 @@ void setup() {
     xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiConnectionHandle);
     xTaskCreate(ServerTask, "server", 4096, NULL, 4, &serverTaskHandle);
     xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
+    DisplayInit();
     xTaskCreate(CockpitDisplayTask, "cockpitDisplay", 4096, NULL, 1, &cockpitDisplayHandle);  
 }
 

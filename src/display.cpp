@@ -1,22 +1,28 @@
 #include <Arduino.h>
-#include <TFT_eSPI.h>
-#include <TFT_eWidget.h>
+#include "DisplaySetup.hpp"
 #include "Utilities.hpp"
 
-// For some reason, the display gets a bug if I declare the display objects inside the task, so I declare them here
-// with static storage duration instead of using the default thread storage duration of the task.
-TFT_eSPI tft_display = TFT_eSPI(); // Object to control the TFT display
-MeterWidget widget_battery_volts    = MeterWidget(&tft_display);
-MeterWidget widget_battery_current  = MeterWidget(&tft_display);
-MeterWidget widget_motor_current    = MeterWidget(&tft_display);
-MeterWidget widget_mppt_current     = MeterWidget(&tft_display);
+void lv_rpm_set(int rpm, lv_obj_t *label, lv_obj_t *arc, lv_obj_t *haste_img){
+    char rpm_text[5];
+    itoa(rpm, rpm_text, 10);
+    lv_label_set_text(label, rpm_text);
+    lv_arc_set_value(arc, rpm);
+    int32_t haste_angle_l = lv_map(rpm, 0, 5500, -600, 600);
+    lv_img_set_angle(haste_img, haste_angle_l);
+}
+
+void lv_chart_set(float value, lv_chart_series_t *serie, lv_obj_t *chart, lv_obj_t *label){
+    char label_text[8];
+    sprintf(label_text, "%.2f", value);
+    lv_label_set_text(label, label_text);
+    lv_chart_set_next_value(chart, serie, value);
+    lv_chart_refresh(chart);
+}
 
 void CockpitDisplayTask(void* parameter) {
-
-    //Needs Font 2 (also Font 4 if using large scale label)
-    //Make sure all the display driver and pin connections are correct by
-    //editing the User_Setup.h file in the TFT_eSPI library folder.
-
+    // Sin wave test variables
+    constexpr float rpm_full_scale = 5500.0;
+    constexpr float rpm_zero_scale = 0.0;
     constexpr float battery_volts_full_scale = 60.0;
     constexpr float battery_volts_zero_scale = 40.0;
     constexpr float battery_amps_full_scale = 60.0;
@@ -28,31 +34,12 @@ void CockpitDisplayTask(void* parameter) {
     constexpr float widget_length = 239.0f;
     constexpr float widget_height = 126.0f;
 
-    tft_display.init();
-    tft_display.setRotation(3);
-    tft_display.fillScreen(TFT_BLACK);
-    tft_display.drawString("Corrente-Bateria", 240 + widget_length / 7, 2, 4);
-    tft_display.drawString("Tensao-Bateria", widget_length / 7, 2, 4);
-    tft_display.drawString("Corrente-Motor", widget_length / 7, 160, 4);
-    tft_display.drawString("Corrente-MPPT", 240 + widget_length / 7, 160, 4);
-
-    // Colour zones are set as a start and end percentage of full scale (0-100)
-    // If start and end of a colour zone are the same then that colour is not used
-    //                              -Red-   -Org-  -Yell-  -Grn-
-    widget_battery_volts.setZones(0, 100, 15, 25, 0, 0, 25, 100);
-    widget_battery_volts.analogMeter(0, 30, battery_volts_zero_scale, battery_volts_full_scale, "V", "48.0", "49.5", "51.0", "52.5", "54.0"); 
-
-    //                              --Red--  -Org-   -Yell-  -Grn-
-    widget_battery_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
-    widget_battery_current.analogMeter(240, 30, battery_amps_zero_scale, battery_amps_full_scale, "A", "-20", "0", "20", "40", "60"); 
-
-    //                              -Red-   -Org-  -Yell-  -Grn-
-    widget_motor_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
-    widget_motor_current.analogMeter(0, 180, motor_amps_zero_scale, motor_amps_full_scale, "A", "0", "15", "30", "45", "60"); 
-
-    //                           -Red-   -Org-  -Yell-  -Grn-
-    widget_mppt_current.setZones(75, 100, 50, 75, 25, 50, 0, 25); // Example here red starts at 75% and ends at 100% of full scale
-    widget_mppt_current.analogMeter(240, 180, mppt_amps_zero_scale, mppt_amps_full_scale, "A", "0", "10", "20", "30", "40"); 
+    // Initializing variables for chart widget
+    lv_chart_series_t *serieRPM_L = lv_chart_add_series(ui_RPM_Current_Chart, lv_color_hex(0x081947), LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t *serieRPM_R = lv_chart_add_series(ui_RPM_Current_Chart, lv_color_hex(0xCA4D0F), LV_CHART_AXIS_SECONDARY_Y);
+    lv_chart_series_t *serieBatA = lv_chart_add_series(ui_Battery_Chart, lv_color_hex(0x30DD3D), LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t *serieBatV = lv_chart_add_series(ui_Battery_Chart, lv_color_hex(0xDB3939), LV_CHART_AXIS_SECONDARY_Y);
+    lv_chart_series_t *serieMppt = lv_chart_add_series(ui_Solar_Chart, lv_color_hex(0xE1C027), LV_CHART_AXIS_PRIMARY_Y);
   
     while (true) {
         constexpr int loop_period = 500; 
@@ -74,23 +61,29 @@ void CockpitDisplayTask(void* parameter) {
                     return (ip - ipmin) * (tomax - tomin) / (ipmax - ipmin) + tomin;
                 };
 
-                float battery_current;
-                battery_current = mapValue(value, (float)0.0, (float)100.0, battery_amps_zero_scale, battery_amps_full_scale);
-                widget_battery_current.updateNeedle(battery_current, 0);
+                float rpm;
+                rpm = mapValue(value, (float)0.0, (float)100.0, rpm_zero_scale, rpm_full_scale);
+                lv_rpm_set(rpm, ui_RPM_L_text, ui_RPM_L_ARC, ui_Haste_RPM_L);
+                lv_rpm_set(rpm, ui_RPM_R_text, ui_RPM_R_ARC, ui_Haste_RPM_R);
+                
+                // float battery_current = mapValue(value, (float)0.0, (float)100.0, battery_amps_zero_scale, battery_amps_full_scale);
+                // widget_battery_current.updateNeedle(battery_current, 0);
 
                 float battery_voltage;
                 battery_voltage = mapValue(value, (float)0.0, (float)100.0, battery_volts_zero_scale, battery_volts_full_scale);
-                widget_battery_volts.updateNeedle(battery_voltage, 0);
+                lv_chart_set(battery_voltage, serieBatV, ui_Battery_Chart, ui_Battery_Volts_text);
 
                 float motor_current;
                 motor_current = mapValue(value, (float)0.0, (float)100.0, motor_amps_zero_scale, motor_amps_full_scale);
-                widget_motor_current.updateNeedle(motor_current, 0);
+                lv_chart_set(motor_current, serieRPM_L, ui_RPM_Current_Chart, ui_RPM_L_Current_text);
+                lv_chart_set(motor_current, serieRPM_R, ui_RPM_Current_Chart, ui_RPM_R_Current_text);
 
                 float mppt_current;
                 mppt_current = mapValue(value, (float)0.0, (float)100.0, mppt_amps_zero_scale, mppt_amps_full_scale);
-                widget_mppt_current.updateNeedle(mppt_current, 0);
+                lv_chart_set(mppt_current, serieMppt, ui_Solar_Chart, ui_MPPT_Current_text);
             }
         };
+        
 
         // Use data from SystemData static class to update the display
 
@@ -98,15 +91,37 @@ void CockpitDisplayTask(void* parameter) {
             if (millis() - update_time > loop_period) {
                 update_time = millis();
 
-                widget_battery_volts.updateNeedle(SystemData::getInstance().all_info.battery_voltage, 0);
-                widget_battery_current.updateNeedle(SystemData::getInstance().all_info.motor_current_left, 0);
-                widget_motor_current.updateNeedle(SystemData::getInstance().all_info.motor_current_right, 0);
-                widget_mppt_current.updateNeedle(SystemData::getInstance().all_info.mppt_current, 0);
+                /* Motors */
+                // L
+                lv_rpm_set(SystemData::getInstance().all_info.rpm_left, ui_RPM_L_text, ui_RPM_L_ARC, ui_Haste_RPM_L);
+
+                // R
+                lv_rpm_set(SystemData::getInstance().all_info.rpm_right, ui_RPM_R_text, ui_RPM_R_ARC, ui_Haste_RPM_R);
+
+                // Motor Current
+                // L
+                lv_chart_set(SystemData::getInstance().all_info.motor_current_left, serieRPM_L, ui_RPM_Current_Chart, ui_RPM_L_Current_text);
+
+                // R
+                lv_chart_set(SystemData::getInstance().all_info.motor_current_right, serieRPM_R, ui_RPM_Current_Chart, ui_RPM_R_Current_text);
+
+                /* Battery */
+                // Voltage
+                lv_chart_set(SystemData::getInstance().all_info.battery_voltage, serieBatV, ui_Battery_Chart, ui_Battery_Volts_text);
+
+                // Current ??? - Is it not measured?
+                // char bat_current_text[8];
+                // sprintf(bat_current_text, "%.2f A", batA);
+                // lv_label_set_text(ui_Battery_Current_text, bat_current_text);
+                // lv_chart_set_next_value(ui_Battery_Chart, serieBatA, batA);
+
+                /* MPPT */
+                lv_chart_set(SystemData::getInstance().all_info.mppt_current, serieMppt, ui_Solar_Chart, ui_MPPT_Current_text);
             }
         };
 
-        //update_display();
-        test_sine_wave();
+        update_display();
+        // test_sine_wave();
         vTaskDelay(pdMS_TO_TICKS(loop_period));
     }
 }
