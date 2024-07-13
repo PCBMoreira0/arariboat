@@ -16,14 +16,15 @@ TaskHandle_t wifiTaskHandle = nullptr;
 TaskHandle_t serverHandle = nullptr;
 TaskHandle_t serialReaderHandle = nullptr;
 
-extern void InitializeFlashMemory();
+void InitializeFlashMemory();
 
-extern void DisplayScreenTask(void* parameter);
-extern void LedBlinkerTask(void* parameter);
-extern void WifiTask(void* parameter);
-extern void ServerTask(void* parameter);
-extern void SerialReaderTask(void* parameter);
-extern void RadioTask(void* parameter);
+void DisplayScreenTask(void* parameter);
+void LedBlinkerTask(void* parameter);
+void WifiTask(void* parameter);
+void ServerTask(void* parameter);
+void SerialReaderTask(void* parameter);
+void RadioTask(void* parameter);
+void FlashCardReaderTask(void *parameter);
 
 void setup() {
     
@@ -31,12 +32,13 @@ void setup() {
 
     InitializeEventLoop(&eventLoop);
     xTaskCreate(LedBlinkerTask, "ledBlinker", 2048, NULL, 1, &ledBlinkerHandle);
-    xTaskCreate(SerialReaderTask, "serialReader", 4096, NULL, 1, &serialReaderHandle);
-    xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
-    xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverHandle);
+    xTaskCreate(SerialReaderTask, "serialReader", 16384, NULL, 1, &serialReaderHandle);
+    //xTaskCreate(WifiTask, "wifiConnection", 4096, NULL, 1, &wifiTaskHandle);
+    //xTaskCreate(ServerTask, "server", 4096, NULL, 1, &serverHandle);
     //xTaskCreate(DisplayScreenTask, "displayScreen", 4096, NULL, 1, NULL);
-    InitializeFlashMemory();
-    xTaskCreate(RadioTask, "radio", 4096, NULL, 1, NULL);
+    //InitializeFlashMemory();
+    //xTaskCreate(RadioTask, "radio", 4096, NULL, 1, NULL);
+    xTaskCreate(FlashCardReaderTask, "flashCardReader", 8192, NULL, 1, NULL);
 }
 
 void loop() {

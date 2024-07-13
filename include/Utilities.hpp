@@ -2,6 +2,7 @@
 #include "event_loop.hpp" //Event loop to handle events between tasks. This allows tasks to communicate with each other with loosely coupled code.
 #include "logger.hpp" // Logger class for logging messages at a specified interval.
 #include "blinker.hpp" // Blinker class for controlling the onboard LED.
+#include "BoardDefinitions.h" // Information about connected pins
 
 //*********************************************************/
 #define DEBUG // Uncomment to enable debug messages globally/

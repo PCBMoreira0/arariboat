@@ -10,7 +10,7 @@ void InitializeEventLoop(esp_event_loop_handle_t* eventLoop) {
         .queue_size = 10,
         .task_name = "event_loop",
         .task_priority = 1,
-        .task_stack_size = 4096,
+        .task_stack_size = 8192,
         .task_core_id = 0
     };
 

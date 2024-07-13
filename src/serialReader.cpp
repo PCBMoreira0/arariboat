@@ -4,6 +4,7 @@
 #include "Utilities.hpp"
 #include "radio.hpp"
 #include "MavlinkUtilities.hpp"
+#include "storage.hpp"
 
 esp_event_base_t SERIAL_PARSER_EVENT_BASE = "SERIAL_PARSER";
 //ESP_EVENT_DECLARE_BASE(SERIAL_PARSER_EVENT_BASE);
@@ -12,6 +13,7 @@ void ProcessMavlinkMessage(mavlink_message_t message) {
   
     PrintMavlinkMessageInfo(message);
     EnqueueMavlinkMessage(message, radioQueue);      
+    SaveMavlinkMessage(message);
 }
 
 bool TryParseMavlinkMessage(uint8_t input, mavlink_channel_t channel) {

@@ -48,7 +48,7 @@ QueueHandle_t radioQueue;
 
 void InitializeRadio() {
     
-    Lora.setPins(CONFIG_CS, CONFIG_RST, CONFIG_DIO0);
+    Lora.setPins(LORA_CS, LORA_RST, LORA_DIO0);
 
     LoraConfiguration config;
     if (!GetLoraConfiguration(config)) {
