@@ -1,3 +1,7 @@
+/**
+ * Header for display settings
+ */
+
 #ifndef DISPLAYSETUP_H
 #define DISPLAYSETUP_H
 

@@ -1,5 +1,5 @@
 #include <Arduino.h> // Main Arduino library, required for projects that use the Arduino framework.
-#include "DisplaySetup.hpp"  // Hardware-specific library
+#include "DisplaySetup.hpp"  // Display settings
 #include "Utilities.hpp" // Custom utility macros and functions.
 
 // Declare a handle for each task to allow manipulation of the task from other tasks, such as sending notifications, resuming or suspending.

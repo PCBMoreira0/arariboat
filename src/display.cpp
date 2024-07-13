@@ -2,6 +2,7 @@
 #include "DisplaySetup.hpp"
 #include "Utilities.hpp"
 
+/* Set all widgets related to motor RPM measure. */
 void lv_rpm_set(int rpm, lv_obj_t *label, lv_obj_t *arc, lv_obj_t *haste_img){
     char rpm_text[5];
     itoa(rpm, rpm_text, 10);
@@ -11,6 +12,7 @@ void lv_rpm_set(int rpm, lv_obj_t *label, lv_obj_t *arc, lv_obj_t *haste_img){
     lv_img_set_angle(haste_img, haste_angle_l);
 }
 
+/* Set all widgets related to charts */
 void lv_chart_set(float value, lv_chart_series_t *serie, lv_obj_t *chart, lv_obj_t *label){
     char label_text[8];
     sprintf(label_text, "%.2f", value);
@@ -19,6 +21,7 @@ void lv_chart_set(float value, lv_chart_series_t *serie, lv_obj_t *chart, lv_obj
     lv_chart_refresh(chart);
 }
 
+/* Task to update display */
 void CockpitDisplayTask(void* parameter) {
     // Sin wave test variables
     constexpr float rpm_full_scale = 5500.0;
