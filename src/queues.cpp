@@ -26,7 +26,7 @@ void initialize_queues() {
     propulsion_queue = xQueueCreate(message_queue_length, sizeof(message_t)); 
 
     if (broker_queue == NULL || main_radio_queue == NULL || auxiliary_radio_queue == NULL ||
-        internet_queue == NULL || logger_queue == NULL || can_queue == NULL) {
+        internet_queue == NULL || logger_queue == NULL || can_queue == NULL || propulsion_queue == NULL) {
         printf("Failed to create one or more queues.\n");
         //Halt the system
         while (true) {

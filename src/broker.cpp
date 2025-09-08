@@ -12,11 +12,10 @@ void broker_task(void* parameter) {
         // Wait indefinitely for a message to arrive on the central broker queue.
         // The task will block here, consuming no CPU, until a message is available.
         if (xQueueReceive(broker_queue, &received_message, portMAX_DELAY) == pdPASS) {
-            
             // --- Delegation Logic ---
             // Here, you can add rules about where to send messages.
             
-            Serial.printf("[broker_task] Received message from source: %s\n", DATA_SOURCE_NAMES[received_message.source]);
+            // Serial.printf("[broker_task] Received message from source: %s\n", DATA_SOURCE_NAMES[received_message.source]);
             
             // // 1. Send to the Logger Task
             // if (logger_queue != NULL) {
@@ -35,19 +34,19 @@ void broker_task(void* parameter) {
             //     }
             // }
 
-            if (can_queue != NULL) {
-                if (received_message.source == DATA_SOURCE_BMS || 
-                    received_message.source == DATA_SOURCE_MOTOR_LEFT ||
-                    received_message.source == DATA_SOURCE_MOTOR_RIGHT) {
-                    //Skip native CAN messages
-                    return;
-                }
+            // if (can_queue != NULL) {
+            //     if (received_message.source == DATA_SOURCE_BMS || 
+            //         received_message.source == DATA_SOURCE_MOTOR_LEFT ||
+            //         received_message.source == DATA_SOURCE_MOTOR_RIGHT) {
+            //         //Skip native CAN messages
+            //         return;
+            //     }
 
-                // Send a copy of the same message to the CAN task.
-                if (xQueueSend(can_queue, &received_message, pdMS_TO_TICKS(10)) != pdPASS) {
-                    Serial.println("[broker_task] Warning: Failed to send message to CAN queue.");
-                }
-            }
+            //     // Send a copy of the same message to the CAN task.
+            //     if (xQueueSend(can_queue, &received_message, pdMS_TO_TICKS(10)) != pdPASS) {
+            //         Serial.println("[broker_task] Warning: Failed to send message to CAN queue.");
+            //     }
+            // }
 
             #ifdef PROPULSION_BOARD
             if (propulsion_queue != NULL) {
@@ -55,6 +54,7 @@ void broker_task(void* parameter) {
                 if (xQueueSend(propulsion_queue, &received_message, pdMS_TO_TICKS(10)) != pdPASS) {
                     Serial.println("[broker_task] Warning: Failed to send message to Propulsion queue.");
                 }
+
             }
             #endif
 

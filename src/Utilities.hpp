@@ -2,7 +2,7 @@
 #include "led.hpp" // LED class for controlling the onboard LED.
 
 //*********************************************************/
-#define DEBUG // Uncomment to enable debug messages globally/
+// #define DEBUG // Uncomment to enable debug messages globally/
 //*********************************************************/
 
 #ifdef DEBUG
@@ -107,6 +107,7 @@ void mppt_task(void *parameters);
 void broker_task(void* parameter);
 void led_manager_task(void* parameter);
 void can_task(void* parameter);
+void propulsion_task(void* parameter);
 
 
 /// @brief Calibrates a reading by using a linear equation obtained by comparing the readings with a multimeter.
@@ -137,7 +138,7 @@ inline bool EndsWithNewline(const char* str) {
  * - Current Task's Stack Usage (High Water Mark)
  * * It is a valuable tool for debugging performance and memory issues.
  */
-void print_statistics() {
+inline void print_statistics() {
   // Use a single, large buffer to format the entire string. This makes the
   // function safer to call from different tasks, as the entire block of text
   // will be sent to the Serial port in one go, preventing interleaved messages.

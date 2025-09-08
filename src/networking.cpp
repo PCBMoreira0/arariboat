@@ -6,11 +6,14 @@
 #include "ESPmDNS.h" // Required for mDNS service discovery.
 #include "Utilities.hpp" // Custom utility macros and functions.
 #include "time_manager.h" // Header file for time management tasks.
+#include "propulsion.h" // call set_function
+#include "propulsion_defs.h"
 
 void wifi_task(void* parameter) {
     
     std::unordered_map<const char*, const char*> wifiCredentials;
     wifiCredentials["Ararirouter"] = "arariboia";
+    // wifiCredentials["E-Mobil 1"] = "faraboia";
 
     // Register a callback function to handle WiFi events. This function is called when the WiFi status changes.
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -122,6 +125,27 @@ void server_task(void* parameter) {
 
         //request->send(200, "text/html", response);
     });
+
+    #ifdef PROPULSION_BOARD
+    server.on("/propulsion", HTTP_POST, [](AsyncWebServerRequest *request){
+        if(!request->hasParam("function", true)){
+            request->send(400, "text/plain", "Missing parameter: function. Choose linear, exp or log");
+            return;
+        }
+
+        String func = request->getParam("function", true)->value();
+        Serial.println(func);
+        if(func.compareTo("linear") == 0) propulstion_set_function(LINEAR);
+        else if(func.compareTo("exp") == 0) propulstion_set_function(EXP);
+        else if(func.compareTo("log") == 0) propulstion_set_function(LOG);
+        else { 
+            request->send(400, "text/plain", "Missing parameter: function. Choose linear, exp or log");
+            return;
+        }
+
+        request->send(200);        
+    });
+    #endif
 
     while (WiFi.status() != WL_CONNECTED) {
         vTaskDelay(pdMS_TO_TICKS(1000));
