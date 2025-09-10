@@ -13,6 +13,9 @@ const float pot_speed_max_voltage = 5.0f;
 const int dac_max_bit = 256;
 const float dead_zone_threshold = 0.5f;
 
+const float min_motor_factor = 0.3f; // min velocity is 30% 
+const float angular_coef = 0.75f; // example
+
 int num = 0;
 
 PROPULSION_FUNC current_function = LINEAR;
@@ -63,7 +66,7 @@ void propulstion_set_function(PROPULSION_FUNC function){
     current_function = function;
 }
 
-void get_velocity_in_bytes(uint8_t& bb_vel, uint8_t& br_vel, float bb_pot, float br_pot, float dir_pot){
+void get_velocity_in_bytes(uint8_t& bb_vel, uint8_t& br_vel, float bb_pot, float br_pot, float dir_pot, float angular_coef){ // precisa colocar float aqui?
 
     float speed_porc = clamp((float)bb_pot / pot_speed_max_voltage, 0.0f, 1.0f);
 
@@ -74,12 +77,14 @@ void get_velocity_in_bytes(uint8_t& bb_vel, uint8_t& br_vel, float bb_pot, float
         br_vel = 255 * speed_porc;
     }
     else if(dir_pot < (dir_central_voltage - dead_zone_threshold)){
-        uint8_t bb_value = 255 * use_function(map(dir_pot, 0, dir_central_voltage - dead_zone_threshold, 0, pot_dir_max_voltage) / pot_dir_max_voltage);
+        uint8_t bb_value = 255 * max( 
+            angular_coef * use_function (map(dir_pot, 0, dir_central_voltage - dead_zone_threshold, 0.0f, 1.0f)) + (1.0f - angular_coef), min_motor_factor) * speed_porc ; // goes linearly from 1 to 0 but if it's lower than the min established it sends the min
         bb_vel = bb_value * speed_porc;
         br_vel = 255 * speed_porc;
     }
     else{
-        uint8_t br_value = 255 * use_function(map(dir_pot, pot_dir_max_voltage, dir_central_voltage + dead_zone_threshold, 0, pot_dir_max_voltage) / pot_dir_max_voltage);
+        uint8_t br_value = 255 * max( 
+            angular_coef * use_function(map(dir_pot, pot_dir_max_voltage, dir_central_voltage + dead_zone_threshold, 0.0f, 1.0f)) + (1.0f - angular_coef), min_motor_factor) * speed_porc ; 
         bb_vel = 255 * speed_porc;
         br_vel = br_value * speed_porc;
     }
@@ -115,7 +120,7 @@ void propulsion_task(void* parameter) {
         // Serial.println(dir_pot);
 
         uint8_t bb_vel, br_vel;
-        get_velocity_in_bytes(bb_vel, br_vel, bb_pot, br_pot, dir_pot);
+        get_velocity_in_bytes(bb_vel, br_vel, bb_pot, br_pot, dir_pot, angular_coef);
 
         dacWrite(bb_dac_pin, bb_vel);
         dacWrite(br_dac_pin, br_vel);
@@ -128,4 +133,3 @@ void propulsion_task(void* parameter) {
 
         vTaskDelay(pdMS_TO_TICKS(1));
     }
-}
