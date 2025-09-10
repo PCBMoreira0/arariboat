@@ -2,6 +2,7 @@
 #include "Utilities.hpp"
 #include "propulsion.h"
 #include "queues.hpp" // Include the queues header to access the system queues
+#include <iostream> // to change dinamicaly value of motor minimum and angular coef  
 
 const int bb_dac_pin = GPIO_NUM_25;
 const int br_dac_pin = GPIO_NUM_26;
@@ -13,10 +14,22 @@ const float pot_speed_max_voltage = 5.0f;
 const int dac_max_bit = 256;
 const float dead_zone_threshold = 0.5f;
 
-const float min_motor_factor = 0.3f; // min velocity is 30% 
-const float angular_coef = 0.5f; // example
+float min_motor_factor = 0.3f; // min velocity is 30% 
+float angular_coef = 0.5f; // example
 
 int num = 0;
+
+void propulsion_set_angular_coef(){
+    std::cout << "Digite novo valor para min_motor_factor (ex: 0.3): ";
+    std::cin >> min_motor_factor;
+
+    std::cout << "Digite novo valor para angular_coef (ex: 0.5): ";
+    std::cin >> angular_coef;
+
+    std::cout << "Valores atualizados:\n";
+    std::cout << "min_motor_factor = " << min_motor_factor << "\n";
+    std::cout << "angular_coef = " << angular_coef << "\n"; 
+}
 
 PROPULSION_FUNC current_function = LINEAR;
 
