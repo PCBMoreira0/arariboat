@@ -14,7 +14,7 @@ const int dac_max_bit = 256;
 const float dead_zone_threshold = 0.5f;
 
 const float min_motor_factor = 0.3f; // min velocity is 30% 
-const float angular_coef = 0.75f; // example
+const float angular_coef = 0.5f; // example
 
 int num = 0;
 
@@ -79,12 +79,14 @@ void get_velocity_in_bytes(uint8_t& bb_vel, uint8_t& br_vel, float bb_pot, float
     else if(dir_pot < (dir_central_voltage - dead_zone_threshold)){
         uint8_t bb_value = 255 * max( 
             angular_coef * use_function (map(dir_pot, 0, dir_central_voltage - dead_zone_threshold, 0.0f, 1.0f)) + (1.0f - angular_coef), min_motor_factor) * speed_porc ; // goes linearly from 1 to 0 but if it's lower than the min established it sends the min
+        Serial.println(bb_value);
         bb_vel = bb_value * speed_porc;
         br_vel = 255 * speed_porc;
     }
     else{
         uint8_t br_value = 255 * max( 
             angular_coef * use_function(map(dir_pot, pot_dir_max_voltage, dir_central_voltage + dead_zone_threshold, 0.0f, 1.0f)) + (1.0f - angular_coef), min_motor_factor) * speed_porc ; 
+         Serial.println(br_value);
         bb_vel = 255 * speed_porc;
         br_vel = br_value * speed_porc;
     }
@@ -112,8 +114,8 @@ void propulsion_task(void* parameter) {
 
         propulsion_data_t propulsion_data = received_message.payload.propulsion;
 
-        // float bb_pot = propulsion_data.backup_potentiometer_volts;
-        float bb_pot = 5.0f;
+        float bb_pot = propulsion_data.backup_potentiometer_volts;
+        //float bb_pot = 5.0f;
         float br_pot = propulsion_data.throttle_right_potentiometer_volts;
         float dir_pot = propulsion_data.helm_potentiometer_volts;
 
