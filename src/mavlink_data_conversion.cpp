@@ -647,6 +647,19 @@ bool mavlink_msg_from_message_t(message_t message, mavlink_message_t *mavlink_ms
             );
             break;
         }
+        case DATA_SOURCE_PROPULSION: {
+            propulsion_data_t prop_data = message.payload.propulsion;
+            mavlink_msg_eletronic_propulsion_pack(
+                system_id, component_id, mavlink_msg,
+                prop_data.helm_potentiometer_volts,
+                prop_data.throttle_left_potentiometer_volts,
+                prop_data.throttle_right_potentiometer_volts,
+                prop_data.state,
+                message.timestamp.epoch_seconds,
+                message.timestamp.epoch_ms
+            );
+            break;
+        }
         default:
             // If the message source is not recognized, the conversion fails.
             return false;

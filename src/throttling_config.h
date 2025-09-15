@@ -15,6 +15,7 @@ enum ThrottledMessage {
     MSG_GPS,
     MSG_INSTRUMENTATION,
     MSG_TEMPERATURES,
+    MSG_PROPULSION,
     NUM_THROTTLED_MESSAGES // Must be last, provides the size of the enum.
 };
 
@@ -32,4 +33,5 @@ const uint32_t send_intervals_ms[] = {
     [MSG_GPS]               = 1000,  // 1 Hz
     [MSG_INSTRUMENTATION]   = 1000,  // 1 Hz
     [MSG_TEMPERATURES]      = 10000, // 0.1 Hz
+    [MSG_PROPULSION]        = 200    // 5 Hz
 };

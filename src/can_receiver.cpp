@@ -162,6 +162,13 @@ void can_transmit_task(void* parameter) {
                     }
                     break;
                 }
+                case DATA_SOURCE_PROPULSION: {
+                    if (millis() - last_sent_time[MSG_PROPULSION] >= send_intervals_ms[MSG_PROPULSION]) {
+                        send_mavlink_can_stream(&mavlink_msg);
+                        last_sent_time[MSG_PROPULSION] = millis();
+                    }
+                    break;
+                }
             }
         }
     }

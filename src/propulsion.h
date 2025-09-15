@@ -7,3 +7,4 @@ enum PROPULSION_FUNC {
 };
 
 void propulstion_set_function(PROPULSION_FUNC function);
+uint8_t propulsion_get_state();

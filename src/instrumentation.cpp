@@ -7,6 +7,7 @@
 #include "time_manager.h"
 #include "queues.hpp"
 #include "propulsion_defs.h"
+#include "propulsion.h"
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
 
@@ -28,12 +29,11 @@ constexpr uint8_t voltages_board_eeprom_address = 0x52;
 constexpr uint8_t propulsion_board_eeprom_address = 0x53;
 
 //Time to post data to the system queue
-#ifdef PROPULSION_BOARD
-int time_to_post_data_ms = 1; //for instrumentation data posting
-#endif
-
 #ifndef PROPULSION_BOARD
 int time_to_post_data_ms = 250; //for instrumentation data posting
+#endif
+#ifdef PROPULSION_BOARD
+int time_to_post_data_ms = 50; //for propulsion data posting
 #endif
 
 int instrumentation_debug_print_interval_ms = 500; //Interval between serial prints
@@ -410,13 +410,7 @@ void instrumentation_task(void* parameter) {
 
     while (true) {
         
-        #ifdef PROPULSION_BOARD
-        vTaskDelay(pdMS_TO_TICKS(10)); // Short delay to allow other tasks to run
-        #endif
-        
-        #ifndef PROPULSION_BOARD
         vTaskDelay(pdMS_TO_TICKS(50)); // Short delay to allow other tasks to run
-        #endif
 
         char instrumentation_debug_buffer[768]; // Increased buffer size for more data
         memset(instrumentation_debug_buffer, 0, sizeof(instrumentation_debug_buffer));
@@ -424,7 +418,7 @@ void instrumentation_task(void* parameter) {
 
         static unsigned long last_init_check_time = 0;
         constexpr unsigned long init_check_interval = 1000; // Quick fix to prevent excessive heap allocations due to failed begin() calls when board is not present
-        
+
         #ifndef PROPULSION_BOARD
         // --- CURRENTS ADC & CALIBRATION ---
         // if (!is_currents_adc_initialized && (millis() - last_init_check_time > init_check_interval)) {
@@ -734,9 +728,9 @@ void instrumentation_task(void* parameter) {
                     instrumentation_debug_buffer[buffer_current_len++] = '\n'; // Ensure it ends with a newline
                     instrumentation_debug_buffer[buffer_current_len] = '\0'; // Null-terminate the string
                 }
-                // Serial.print(instrumentation_debug_buffer); // Print all accumulated data at once
+                Serial.print(instrumentation_debug_buffer); // Print all accumulated data at once
             } else {
-                // Serial.println("[Instrumentation] No data to report this cycle.");
+                Serial.println("[Instrumentation] No data to report this cycle.");
             }
         }
 
@@ -778,10 +772,11 @@ void instrumentation_task(void* parameter) {
         message_t propulsion_msg;
         propulsion_msg.source = DATA_SOURCE_PROPULSION;
         auto& propulsion_data = propulsion_msg.payload.propulsion;
-        propulsion_data.backup_potentiometer_volts = backup_potentiometer.value();
-        propulsion_data.helm_potentiometer_volts = helm_potentiometer.value();
-        propulsion_data.throttle_left_potentiometer_volts = throttle_left_potentiometer.value();
-        propulsion_data.throttle_right_potentiometer_volts = throttle_right_potentiometer.value();
+        propulsion_data.backup_potentiometer_volts = static_cast<uint16_t>(backup_potentiometer.value() * 1000.0f);
+        propulsion_data.helm_potentiometer_volts = static_cast<uint16_t>(helm_potentiometer.value() * 1000.0f);
+        propulsion_data.throttle_left_potentiometer_volts = static_cast<uint16_t>(throttle_left_potentiometer.value() * 1000.0f);
+        propulsion_data.throttle_right_potentiometer_volts = static_cast<uint16_t>(throttle_right_potentiometer.value() * 1000.0f);
+        propulsion_data.state = propulsion_get_state();
         propulsion_msg.timestamp.epoch_ms = get_epoch_seconds();
         propulsion_msg.timestamp.epoch_ms = get_epoch_millis();
         propulsion_msg.timestamp.time_since_boot_ms = time_boot_ms;
