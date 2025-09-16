@@ -128,19 +128,41 @@ void server_task(void* parameter) {
 
     #ifdef PROPULSION_BOARD
     server.on("/propulsion", HTTP_POST, [](AsyncWebServerRequest *request){
-        if(!request->hasParam("function", true)){
-            request->send(400, "text/plain", "Missing parameter: function. Choose linear, exp or log");
-            return;
+        if(request->hasParam("function", true)){
+            String func = request->getParam("function", true)->value();
+            Serial.println(func);
+            if(func != ""){
+                if(func.compareTo("linear") == 0) propulstion_set_function(LINEAR);
+                else if(func.compareTo("exp") == 0) propulstion_set_function(EXP);
+                else if(func.compareTo("log") == 0) propulstion_set_function(LOG);
+            }
+        }  
+
+        if(request->hasParam("deadzone", true)){
+            float deadzone = request->getParam("deadzone", true)->value().toFloat();
+            Serial.println(deadzone);
+            if(deadzone > 0){
+                // TODO
+                Serial.printf("Deadzone: %f\n", deadzone);
+            }
+        }  
+
+        if(request->hasParam("cutzone", true)){
+            float cutzone = request->getParam("cutzone", true)->value().toFloat();
+            Serial.println(cutzone);
+            if(cutzone > 0){
+                // TODO
+                Serial.printf("Cutzone: %f\n", cutzone);
+            }
         }
 
-        String func = request->getParam("function", true)->value();
-        Serial.println(func);
-        if(func.compareTo("linear") == 0) propulstion_set_function(LINEAR);
-        else if(func.compareTo("exp") == 0) propulstion_set_function(EXP);
-        else if(func.compareTo("log") == 0) propulstion_set_function(LOG);
-        else { 
-            request->send(400, "text/plain", "Missing parameter: function. Choose linear, exp or log");
-            return;
+        if(request->hasParam("slope", true)){
+            float slope = request->getParam("slope", true)->value().toFloat();
+            Serial.println(slope);
+            if(slope > 0){
+                // TODO
+                Serial.printf("Slope: %f\n", slope);
+            }
         }
 
         request->send(200);        
