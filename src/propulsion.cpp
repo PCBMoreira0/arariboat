@@ -110,6 +110,7 @@ static void get_velocity_in_bytes(uint8_t &bb_vel, uint8_t &be_vel, float bb_pot
 
         bb_vel = 255 * speed_porc;
         be_vel = 255 * speed_porc;
+        be_vel = 255 * speed_porc;
     }
     else
     {
