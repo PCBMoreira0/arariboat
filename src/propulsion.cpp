@@ -12,26 +12,29 @@ static const int propulsion_voltage_unit = 1000; // mV
 static const float pot_dir_max_voltage = 3.3f * propulsion_voltage_unit;   // 3300 mV
 static const float pot_speed_max_voltage = 5.0f * propulsion_voltage_unit; // 5000 mV
 static const int dac_max_bit = 256;
-static const float dead_zone_threshold = 0.5f * propulsion_voltage_unit;
+static float dead_zone_threshold = 0.5f * propulsion_voltage_unit;
 
-float min_motor_factor = 0.3f; // min velocity is 30%
-float angular_coef = 0.5f;     // example
+float min_motor_factor = 1.0f; // min velocity is 30%
+float angular_coef = 1.0f;     // example
 
 static uint8_t state = 0; // 0 - off, 1 - on
 static PROPULSION_FUNC current_function = LINEAR;
 
-void propulsion_set_angular_coef()
+void propulstion_set_cut_zone(float cutzone)
 {
-    std::cout << "Digite novo valor para min_motor_factor (ex: 0.3): ";
-    std::cin >> min_motor_factor;
-
-    std::cout << "Digite novo valor para angular_coef (ex: 0.5): ";
-    std::cin >> angular_coef;
-
-    std::cout << "Valores atualizados:\n";
-    std::cout << "min_motor_factor = " << min_motor_factor << "\n";
-    std::cout << "angular_coef = " << angular_coef << "\n";
+    min_motor_factor = cutzone;
 }
+
+void propulstion_set_angular_coef(float coef)
+{
+    angular_coef = coef;
+}
+
+void propulstion_set_dead_zone(float deadzone)
+{
+    dead_zone_threshold = deadzone * propulsion_voltage_unit;
+}
+
 
 // utility functions
 static float map(float x, float in_min, float in_max, float out_min, float out_max)
@@ -167,6 +170,7 @@ void propulsion_task(void *parameter)
         dacWrite(bb_dac_pin, bb_vel);
         dacWrite(be_dac_pin, be_vel);
 
+        Serial.printf("CUT: %f\nSLOPE: %f\nBB: %d\nBE: %d\n", min_motor_factor, angular_coef, bb_vel, be_vel);
         // Serial.printf("\nBombordo: %.2f V\n"
         //                 "Direcao: %d\n"
         //               "Boreste: %.2f V\n"

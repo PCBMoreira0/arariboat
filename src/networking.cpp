@@ -140,28 +140,22 @@ void server_task(void* parameter) {
 
         if(request->hasParam("deadzone", true)){
             float deadzone = request->getParam("deadzone", true)->value().toFloat();
-            Serial.println(deadzone);
-            if(deadzone > 0){
-                // TODO
-                Serial.printf("Deadzone: %f\n", deadzone);
+            if(deadzone >= 0){
+                propulstion_set_dead_zone(deadzone);
             }
         }  
 
         if(request->hasParam("cutzone", true)){
             float cutzone = request->getParam("cutzone", true)->value().toFloat();
-            Serial.println(cutzone);
-            if(cutzone > 0){
-                // TODO
-                Serial.printf("Cutzone: %f\n", cutzone);
+            if(cutzone >= 0){
+                propulstion_set_cut_zone(cutzone);
             }
         }
 
         if(request->hasParam("slope", true)){
             float slope = request->getParam("slope", true)->value().toFloat();
-            Serial.println(slope);
-            if(slope > 0){
-                // TODO
-                Serial.printf("Slope: %f\n", slope);
+            if(slope >= 0){
+                propulstion_set_angular_coef(slope);
             }
         }
 

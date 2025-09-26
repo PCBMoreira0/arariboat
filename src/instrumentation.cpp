@@ -728,7 +728,7 @@ void instrumentation_task(void* parameter) {
                     instrumentation_debug_buffer[buffer_current_len++] = '\n'; // Ensure it ends with a newline
                     instrumentation_debug_buffer[buffer_current_len] = '\0'; // Null-terminate the string
                 }
-                Serial.print(instrumentation_debug_buffer); // Print all accumulated data at once
+                // Serial.print(instrumentation_debug_buffer); // Print all accumulated data at once
             } else {
                 Serial.println("[Instrumentation] No data to report this cycle.");
             }
