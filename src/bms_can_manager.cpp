@@ -30,7 +30,7 @@ void BMSCANManager::print_can_handlers() {
     for (const auto& handler : _can_handlers) {
         snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), "0x%X ", handler.first);
     }
-    Serial.println(buffer);
+    // Serial.println(buffer);
 }
 
 bool BMSCANManager::handle_can_frame(const twai_message_t& message) {
@@ -78,9 +78,9 @@ void BMSCANManager::handle_voltage_response(const twai_message_t& message) {
     _bms_data.voltage_data.cumulative_voltage_decivolts = ((message.data[0] << 8) | message.data[1]);
     _bms_data.voltage_data.current_deciamps = ((message.data[4] << 8) | message.data[5]) - 30000;
     _bms_data.voltage_data.soc_decipercent = ((message.data[6] << 8) | message.data[7]);
-    Serial.printf("[BMS] Voltage Data: Cumulative Voltage=%.1fV, Current=%.1fA, SOC=%.1f%%\n",
-        _bms_data.voltage_data.cumulative_voltage_decivolts / 10.f, _bms_data.voltage_data.current_deciamps / 10.f, _bms_data.voltage_data.soc_decipercent / 10.f);
-    _received_flags |= FLAG_VOLTAGE;
+    // // Serial.printf("[BMS] Voltage Data: Cumulative Voltage=%.1fV, Current=%.1fA, SOC=%.1f%%\n",
+    //     _bms_data.voltage_data.cumulative_voltage_decivolts / 10.f, _bms_data.voltage_data.current_deciamps / 10.f, _bms_data.voltage_data.soc_decipercent / 10.f);
+    // _received_flags |= FLAG_VOLTAGE;
     check_and_publish();
 }
 
@@ -90,10 +90,10 @@ void BMSCANManager::handle_charge_discharge_response(const twai_message_t& messa
     _bms_data.charge_discharge_status.discharge_mos = message.data[2];
     _bms_data.charge_discharge_status.bms_life_cycles = message.data[3];
     _bms_data.charge_discharge_status.remaining_capacity_raw = ((message.data[4] << 24) | (message.data[5] << 16) | (message.data[6] << 8) | message.data[7]);
-    Serial.printf("[BMS] Charge/Discharge Status: State=%d, Charge MOS=%d, Discharge MOS=%d, BMS Life Cycles=%d, Remaining Capacity=%d mAh\n",
-        _bms_data.charge_discharge_status.state, _bms_data.charge_discharge_status.charge_mos, _bms_data.charge_discharge_status.discharge_mos,
-        _bms_data.charge_discharge_status.bms_life_cycles, _bms_data.charge_discharge_status.remaining_capacity_raw);
-    _received_flags |= FLAG_CHARGE_DISCHARGE;
+    // // Serial.printf("[BMS] Charge/Discharge Status: State=%d, Charge MOS=%d, Discharge MOS=%d, BMS Life Cycles=%d, Remaining Capacity=%d mAh\n",
+    //     _bms_data.charge_discharge_status.state, _bms_data.charge_discharge_status.charge_mos, _bms_data.charge_discharge_status.discharge_mos,
+    //     _bms_data.charge_discharge_status.bms_life_cycles, _bms_data.charge_discharge_status.remaining_capacity_raw);
+    // _received_flags |= FLAG_CHARGE_DISCHARGE;
     check_and_publish();
 }
 
@@ -103,9 +103,9 @@ void BMSCANManager::handle_status_response(const twai_message_t& message) {
     _bms_data.bms_status.charger_status = message.data[2];
     _bms_data.bms_status.load_status = message.data[3];
     _bms_data.bms_status.io_bitfield = message.data[4];
-    Serial.printf("[BMS] BMS Status: Num Strings=%d, Num Temp Sensors=%d, Charger Status=%d, Load Status=%d, IO Bitfield=0x%02X\n",
-        _bms_data.bms_status.num_strings, _bms_data.bms_status.num_temp_sensors, _bms_data.bms_status.charger_status,
-        _bms_data.bms_status.load_status, _bms_data.bms_status.io_bitfield);
+    // // Serial.printf("[BMS] BMS Status: Num Strings=%d, Num Temp Sensors=%d, Charger Status=%d, Load Status=%d, IO Bitfield=0x%02X\n",
+    //     _bms_data.bms_status.num_strings, _bms_data.bms_status.num_temp_sensors, _bms_data.bms_status.charger_status,
+    //     _bms_data.bms_status.load_status, _bms_data.bms_status.io_bitfield);
     _received_flags |= FLAG_STATUS;
     check_and_publish();
 }
@@ -122,12 +122,12 @@ void BMSCANManager::handle_cell_voltage_response(const twai_message_t& message) 
         }
     }
 
-    Serial.printf("[BMS] Cell Voltage Frame %d: [%d mV, %d mV, %d mV]\n",
-        frame_index,
-        _bms_data.cell_voltage_frame[frame_index].voltages_mv[0],
-        _bms_data.cell_voltage_frame[frame_index].voltages_mv[1],
-        _bms_data.cell_voltage_frame[frame_index].voltages_mv[2]);
-    _received_flags |= FLAG_CELL_VOLTAGE;
+    // Serial.printf("[BMS] Cell Voltage Frame %d: [%d mV, %d mV, %d mV]\n",
+    //     frame_index,
+    //     _bms_data.cell_voltage_frame[frame_index].voltages_mv[0],
+    //     _bms_data.cell_voltage_frame[frame_index].voltages_mv[1],
+    //     _bms_data.cell_voltage_frame[frame_index].voltages_mv[2]);
+    // _received_flags |= FLAG_CELL_VOLTAGE;
     check_and_publish();
 }
     
@@ -143,15 +143,15 @@ void BMSCANManager::handle_temperature_response(const twai_message_t& message) {
         }
     }
 
-    Serial.printf("[BMS] Temperature Frame %d: [%d °C, %d °C, %d °C, %d °C, %d °C, %d °C, %d °C]\n",
-        frame_index,
-        _bms_data.temperature_frame[frame_index].raw_temps[0],
-        _bms_data.temperature_frame[frame_index].raw_temps[1],
-        _bms_data.temperature_frame[frame_index].raw_temps[2],
-        _bms_data.temperature_frame[frame_index].raw_temps[3],
-        _bms_data.temperature_frame[frame_index].raw_temps[4],
-        _bms_data.temperature_frame[frame_index].raw_temps[5],
-        _bms_data.temperature_frame[frame_index].raw_temps[6]);
+    // Serial.printf("[BMS] Temperature Frame %d: [%d °C, %d °C, %d °C, %d °C, %d °C, %d °C, %d °C]\n",
+    //     frame_index,
+    //     _bms_data.temperature_frame[frame_index].raw_temps[0],
+    //     _bms_data.temperature_frame[frame_index].raw_temps[1],
+    //     _bms_data.temperature_frame[frame_index].raw_temps[2],
+    //     _bms_data.temperature_frame[frame_index].raw_temps[3],
+    //     _bms_data.temperature_frame[frame_index].raw_temps[4],
+    //     _bms_data.temperature_frame[frame_index].raw_temps[5],
+    //     _bms_data.temperature_frame[frame_index].raw_temps[6]);
     _received_flags |= FLAG_TEMPERATURE;
     check_and_publish();
 }
@@ -168,14 +168,14 @@ void BMSCANManager::handle_failure_response(const twai_message_t& message) {
         }
     }
     snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), "]\n");
-    Serial.print(buffer);
+    // Serial.print(buffer);
     _received_flags |= FLAG_FAILURE;
     check_and_publish();
 }
 
 void BMSCANManager::poll_bms_data() {
     // Send poll commands to the BMS for each data type
-    Serial.println("[BMS] Polling BMS data...");
+    // Serial.println("[BMS] Polling BMS data...");
     send_poll_command(BMS_VOLTAGE_ID_POLL);
     send_poll_command(BMS_CHARGE_DISCHARGE_ID_POLL);
     send_poll_command(BMS_STATUS_ID_POLL);
