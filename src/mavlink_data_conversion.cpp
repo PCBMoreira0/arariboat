@@ -618,46 +618,46 @@ bool mavlink_msg_from_message_t(message_t message, mavlink_message_t *mavlink_ms
             break;
         }
         case DATA_SOURCE_INSTRUMENTATION: {
-            instrumentation_data_t inst_data = message.payload.instrumentation;
-            mavlink_msg_instrumentation_pack(
-                system_id, component_id, mavlink_msg,
-                inst_data.battery_current_cA,
-                inst_data.motor_current_left_cA,
-                inst_data.motor_current_right_cA,
-                inst_data.mppt_current_cA,
-                inst_data.auxiliary_battery_current_cA,
-                inst_data.battery_voltage_cV,
-                inst_data.auxiliary_battery_voltage_cV,
-                inst_data.irradiance,
-                message.timestamp.epoch_seconds,
-                message.timestamp.epoch_ms
-            );
+            // instrumentation_data_t inst_data = message.payload.instrumentation;
+            // mavlink_msg_instrumentation_pack(
+            //     system_id, component_id, mavlink_msg,
+            //     inst_data.battery_current_cA,
+            //     inst_data.motor_current_left_cA,
+            //     inst_data.motor_current_right_cA,
+            //     inst_data.mppt_current_cA,
+            //     inst_data.auxiliary_battery_current_cA,
+            //     inst_data.battery_voltage_cV,
+            //     inst_data.auxiliary_battery_voltage_cV,
+            //     inst_data.irradiance,
+            //     message.timestamp.epoch_seconds,
+            //     message.timestamp.epoch_ms
+            // );
             break;
         }
         case DATA_SOURCE_TEMPERATURES: {
-            temperature_data_t temp_data = message.payload.temperature;
-            mavlink_msg_temperatures_pack(
-                system_id, component_id, mavlink_msg,
-                temp_data.battery_left_cdegC,
-                temp_data.battery_right_cdegC,
-                temp_data.mppt_left_cdegC,
-                temp_data.mppt_right_cdegC,
-                message.timestamp.epoch_seconds,
-                message.timestamp.epoch_ms
-            );
+            // temperature_data_t temp_data = message.payload.temperature;
+            // mavlink_msg_temperatures_pack(
+            //     system_id, component_id, mavlink_msg,
+            //     temp_data.battery_left_cdegC,
+            //     temp_data.battery_right_cdegC,
+            //     temp_data.mppt_left_cdegC,
+            //     temp_data.mppt_right_cdegC,
+            //     message.timestamp.epoch_seconds,
+            //     message.timestamp.epoch_ms
+            // );
             break;
         }
         case DATA_SOURCE_PROPULSION: {
-            propulsion_data_t prop_data = message.payload.propulsion;
-            mavlink_msg_eletronic_propulsion_pack(
-                system_id, component_id, mavlink_msg,
-                prop_data.helm_potentiometer_volts,
-                prop_data.throttle_left_potentiometer_volts,
-                prop_data.throttle_right_potentiometer_volts,
-                prop_data.state,
-                message.timestamp.epoch_seconds,
-                message.timestamp.epoch_ms
-            );
+            // propulsion_data_t prop_data = message.payload.propulsion;
+            // mavlink_msg_eletronic_propulsion_pack(
+            //     system_id, component_id, mavlink_msg,
+            //     prop_data.helm_potentiometer_volts,
+            //     prop_data.throttle_left_potentiometer_volts,
+            //     prop_data.throttle_right_potentiometer_volts,
+            //     prop_data.state,
+            //     message.timestamp.epoch_seconds,
+            //     message.timestamp.epoch_ms
+            // );
             break;
         }
         default:
