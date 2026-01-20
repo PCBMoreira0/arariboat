@@ -34,19 +34,19 @@ void broker_task(void* parameter) {
             //     }
             // }
 
-            if (can_queue != NULL) {
-                if (received_message.source == DATA_SOURCE_BMS || 
-                    received_message.source == DATA_SOURCE_MOTOR_LEFT ||
-                    received_message.source == DATA_SOURCE_MOTOR_RIGHT) {
-                    //Skip native CAN messages
-                    return;
-                }
+            // if (can_queue != NULL) {
+            //     if (received_message.source == DATA_SOURCE_BMS || 
+            //         received_message.source == DATA_SOURCE_MOTOR_LEFT ||
+            //         received_message.source == DATA_SOURCE_MOTOR_RIGHT) {
+            //         //Skip native CAN messages
+            //         return;
+            //     }
 
-                // Send a copy of the same message to the CAN task.
-                if (xQueueSend(can_queue, &received_message, pdMS_TO_TICKS(10)) != pdPASS) {
-                    Serial.println("[broker_task] Warning: Failed to send message to CAN queue.");
-                }
-            }
+            //     // Send a copy of the same message to the CAN task.
+            //     if (xQueueSend(can_queue, &received_message, pdMS_TO_TICKS(10)) != pdPASS) {
+            //         Serial.println("[broker_task] Warning: Failed to send message to CAN queue.");
+            //     }
+            // }
 
             #ifdef PROPULSION_BOARD
             if (propulsion_queue != NULL) {

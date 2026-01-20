@@ -37,10 +37,10 @@ void propulstion_set_dead_zone(float deadzone)
 
 
 // utility functions
-static float map(float x, float in_min, float in_max, float out_min, float out_max)
-{
-    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
+// static float map(float x, float in_min, float in_max, float out_min, float out_max)
+// {
+//     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+// }
 
 static double clamp(double v, double min, double max)
 {
@@ -160,17 +160,38 @@ void propulsion_task(void *parameter)
 
         propulsion_data_t propulsion_data = received_message.payload.propulsion;
 
-        float bb_pot = propulsion_data.backup_potentiometer_volts;
-        float be_pot = propulsion_data.throttle_right_potentiometer_volts;
-        float dir_pot = propulsion_data.helm_potentiometer_volts;
+        int backup_pot = propulsion_data.backup_potentiometer_volts;
+        int bb_pot = propulsion_data.throttle_right_potentiometer_volts;
+        int be_pot = propulsion_data.throttle_left_potentiometer_volts;
+        int bb_vel = 0;
+        int be_vel = 0;
 
-        uint8_t bb_vel, be_vel;
-        get_velocity_in_bytes(bb_vel, be_vel, bb_pot, be_pot, dir_pot, angular_coef);
+        if(bb_pot > 636){
+            bb_vel = map(bb_pot, 636, 2339, 30, 255);
+                
+            if (bb_vel<30){
+                bb_vel=30;
+            }
+            if (bb_vel>255){
+                bb_vel=255;
+            }
+        }
+
+        if(be_pot > 722){
+            be_vel = map(be_pot, 722, 2448, 30, 255);
+
+            if (be_vel<30){
+                be_vel=30;
+            }
+            if (be_vel>255){
+                be_vel=255;
+            }
+        }
 
         dacWrite(bb_dac_pin, bb_vel);
         dacWrite(be_dac_pin, be_vel);
 
-        Serial.printf("CUT: %f\nSLOPE: %f\nBB: %d\nBE: %d\n", min_motor_factor, angular_coef, bb_vel, be_vel);
+        Serial.printf("Backup: %d\nBB: %d\nBE: %d\nBBVEL: %d\nBEVEL: %d\n", backup_pot, bb_pot, be_pot, bb_vel, be_vel);
         // Serial.printf("\nBombordo: %.2f V\n"
         //                 "Direcao: %d\n"
         //               "Boreste: %.2f V\n"

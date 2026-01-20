@@ -772,10 +772,10 @@ void instrumentation_task(void* parameter) {
         message_t propulsion_msg;
         propulsion_msg.source = DATA_SOURCE_PROPULSION;
         auto& propulsion_data = propulsion_msg.payload.propulsion;
-        propulsion_data.backup_potentiometer_volts = static_cast<uint16_t>(backup_potentiometer.value() * 1000.0f);
-        propulsion_data.helm_potentiometer_volts = static_cast<uint16_t>(helm_potentiometer.value() * 1000.0f);
-        propulsion_data.throttle_left_potentiometer_volts = static_cast<uint16_t>(throttle_left_potentiometer.value() * 1000.0f);
-        propulsion_data.throttle_right_potentiometer_volts = static_cast<uint16_t>(throttle_right_potentiometer.value() * 1000.0f);
+        propulsion_data.backup_potentiometer_volts = backup_potentiometer.value() * 1000.0f;
+        propulsion_data.helm_potentiometer_volts = helm_potentiometer.value() * 1000.0f;
+        propulsion_data.throttle_left_potentiometer_volts = throttle_left_potentiometer.value() * 1000.0f;
+        propulsion_data.throttle_right_potentiometer_volts = throttle_right_potentiometer.value() * 1000.0f;
         propulsion_data.state = propulsion_get_state();
         propulsion_msg.timestamp.epoch_ms = get_epoch_seconds();
         propulsion_msg.timestamp.epoch_ms = get_epoch_millis();

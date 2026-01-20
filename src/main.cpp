@@ -43,24 +43,24 @@ void setup() {
     parameter_manager.begin(); // Initialize the parameter manager to load parameters from persistent storage.
 
       
-    CREATE_TASK(led_manager_task, STACK_SIZE(2048), PRIORITY(1));
+    // CREATE_TASK(led_manager_task, STACK_SIZE(2048), PRIORITY(1));
     // CREATE_TASK(uart_task, STACK_SIZE(4096), PRIORITY(1));
-    CREATE_TASK(wifi_task, STACK_SIZE(4096), PRIORITY(2));
-    CREATE_TASK(server_task, STACK_SIZE(8096), PRIORITY(3));
-    CREATE_TASK(time_manager_task, STACK_SIZE(4096), PRIORITY(1));
+    // CREATE_TASK(wifi_task, STACK_SIZE(4096), PRIORITY(2));
+    // CREATE_TASK(server_task, STACK_SIZE(8096), PRIORITY(3));
+    // CREATE_TASK(time_manager_task, STACK_SIZE(4096), PRIORITY(1));
     // CREATE_TASK(TemperatureTask, STACK_SIZE(4096), PRIORITY(1));
     // CREATE_TASK(GPSTask, STACK_SIZE(4096), PRIORITY(1));
     CREATE_TASK(instrumentation_task, STACK_SIZE(8192), PRIORITY(3));
     // CREATE_TASK(mppt_task, STACK_SIZE(4096), PRIORITY(3));
     CREATE_TASK(broker_task, STACK_SIZE(4096), PRIORITY(2));
-    CREATE_TASK(can_task, STACK_SIZE(4096), PRIORITY(4)); // Create the CAN task to handle CAN communication.
+    // CREATE_TASK(can_task, STACK_SIZE(4096), PRIORITY(4)); // Create the CAN task to handle CAN communication.
     CREATE_TASK(propulsion_task, STACK_SIZE(4096), PRIORITY(5)); // Create the propulsion task to handle propulsion system.
 }
 
 void loop() {
 
     vTaskDelay(pdMS_TO_TICKS(60000));
-    print_statistics(); // Print system statistics for debugging, performance and memory allocation analysis
+    // print_statistics(); // Print system statistics for debugging, performance and memory allocation analysis
 }
 
 
