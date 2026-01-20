@@ -160,13 +160,14 @@ void propulsion_task(void *parameter)
 
         propulsion_data_t propulsion_data = received_message.payload.propulsion;
 
+        int backup_pot = propulsion_data.backup_potentiometer_volts;
         int bb_pot = propulsion_data.throttle_right_potentiometer_volts;
         int be_pot = propulsion_data.throttle_left_potentiometer_volts;
         int bb_vel = 0;
         int be_vel = 0;
 
-        if(bb_pot > 118){
-            bb_vel = map(bb_pot, 118, 1869, 30, 255);
+        if(bb_pot > 636){
+            bb_vel = map(bb_pot, 636, 2339, 30, 255);
                 
             if (bb_vel<30){
                 bb_vel=30;
@@ -176,8 +177,8 @@ void propulsion_task(void *parameter)
             }
         }
 
-        if(be_pot > 1){
-            be_vel = map(be_pot, 1, 1702, 30, 255);
+        if(be_pot > 722){
+            be_vel = map(be_pot, 722, 2448, 30, 255);
 
             if (be_vel<30){
                 be_vel=30;
@@ -190,7 +191,7 @@ void propulsion_task(void *parameter)
         dacWrite(bb_dac_pin, bb_vel);
         dacWrite(be_dac_pin, be_vel);
 
-        Serial.printf("BB: %d\nBE: %d\nBBVEL: %d\nBEVEL: %d\n", bb_pot, be_pot, bb_vel, be_vel);
+        Serial.printf("Backup: %d\nBB: %d\nBE: %d\nBBVEL: %d\nBEVEL: %d\n", backup_pot, bb_pot, be_pot, bb_vel, be_vel);
         // Serial.printf("\nBombordo: %.2f V\n"
         //                 "Direcao: %d\n"
         //               "Boreste: %.2f V\n"
